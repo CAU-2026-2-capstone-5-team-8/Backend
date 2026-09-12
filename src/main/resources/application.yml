@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: cau-capstone8-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/backend}
+    username: ${DB_USERNAME:backend}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: backend
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: backend
+    default-schema: backend
+    create-schemas: true
+    clean-disabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+
+ml:
+  mode: ${ML_MODE:stub}
