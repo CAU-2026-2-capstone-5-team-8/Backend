@@ -2,7 +2,7 @@
 
 Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당하는 독서 진단·추천 프로토타입입니다.
 
-현재 구현 범위는 **2단계 기반 구성**입니다. 진단·도서·추천 API, ML 계산, 데모 데이터는 이후 단계에서 구현합니다.
+현재 구현 범위는 **3단계 분야·도서 조회**입니다. 분야와 도서 목록·상세 API, 카탈로그 DB 제약, 선택적으로 활성화하는 합성 데모 데이터를 제공합니다. 진단·추천 API와 ML 계산은 이후 단계에서 구현합니다.
 
 ## 요구 환경
 
@@ -36,7 +36,27 @@ docker compose up -d --wait
 | http://localhost:8080/swagger-ui.html | Swagger UI |
 | http://localhost:8080/v3/api-docs | OpenAPI JSON |
 
-현재 업무 API는 없습니다. 상태 확인과 문서 URL만 제공됩니다. 실행 중인 개발 서버는 `Ctrl+C`로 종료합니다.
+업무 API는 아래의 조회 API 3개입니다. 실행 중인 개발 서버는 `Ctrl+C`로 종료합니다.
+
+## 분야와 도서 조회
+
+| API | 설명 |
+| --- | --- |
+| `GET /api/topics` | 분야 ID·코드·이름·부모 ID 목록 |
+| `GET /api/books?topicId=...&page=0&size=20` | 도서 페이지. topicId는 선택 사항 |
+| `GET /api/books/{bookId}` | 도서 상세와 분야별 활성 특성 제공 여부 |
+
+분야·도서는 ID 오름차순으로 반환합니다. 도서 페이지 응답은 `content`, `page`, `size`, `totalElements`, `totalPages`입니다. `page`는 0 이상, `size`는 1~100, ID는 양수입니다. 잘못된 입력은 400, 존재하지 않는 분야·도서는 404이며 오류 응답은 `code`, 한국어 `message`, 서버 생성 `traceId`를 제공합니다.
+
+분야 필터는 직접 연결된 도서만 조회합니다. CS 부모 분야에 OS 도서가 자동 포함되지 않습니다. 도서의 `topics`에는 `id`, `code`, `name`, `primary`, `weight`, `featureAvailable`이 포함됩니다. 특성이 없어도 도서 조회는 가능하며, 특성 제공 여부는 각 분야별 활성 버전을 기준으로 계산합니다.
+
+기본 실행에는 초기 데이터가 없습니다. 합성 데모 도서 5권, CS·OS 분야, 데모 사용자 1명과 특성·출처 메타데이터를 넣으려면 다음처럼 실행합니다.
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local,demo'
+```
+
+데모 도서는 실제 출판물이 아니며 요구 능력 점수는 기능 검증용입니다. 실제 ISBN, 책 원문과 출처 URL은 만들지 않았습니다. 데모 입력은 같은 키가 있으면 덮어쓰지 않습니다. `demo`를 끈 뒤 재시작해도 이미 입력된 데이터는 보존됩니다. 데모 활성화 해제는 데이터 삭제가 아닙니다.
 
 ```bash
 docker compose down
@@ -120,7 +140,9 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 - Migration 위치: `src/main/resources/db/migration`.
 - Migration 버전: UTC `VyyyyMMddHHmmss__description.sql`.
 - main에 반영된 migration은 수정하지 않습니다. 시간 이름만으로 순서·충돌 문제가 해결되지는 않으므로 팀원과 적용 순서를 조율합니다.
-- 초기 migration은 스키마 설명만 설정합니다. 업무 테이블과 데모 데이터는 다음 단계부터 추가합니다.
+- 초기 migration 뒤에 카탈로그 migration을 추가했습니다. `app_user`, `topic`, `book`, `book_topic`, `book_sample`, `book_feature`를 생성합니다. 분야 순환 방지용 내부 guard 테이블도 사용합니다.
+- 도서·분야별 활성 특성 최대 하나, 도서별 주 분야 최대 하나, FK·버전 고유성과 유한한 [0,1] 점수를 DB에서 검증합니다. 분야 변경은 DB에서 직렬화하며 수정 시각은 트리거로 갱신합니다.
+- 데모 SQL은 스키마 migration과 분리되어 `demo` 프로필에서만 실행됩니다.
 
 ## ML 연동 계획
 
@@ -135,5 +157,7 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 - [승인 설계](docs/design.md)
 - [2단계 작업 계획](docs/implementation-plan.md)
 - [2단계 검증 결과](docs/verification-stage2.md)
+- [3단계 구현 계획](docs/superpowers/plans/2026-09-12-catalog.md)
+- [3단계 검증 결과](docs/verification-stage3.md)
 
-다음 단계는 분야·도서·BookFeature와 조회 API입니다. 이후 진단·프로필, 추천·피드백, HTTP ML 순서로 구현합니다.
+다음 단계는 4단계 진단 세션·문제 스냅샷·답변 저장과 재조회입니다. 이후 진단 완료·프로필, 추천·피드백, HTTP ML 순서로 구현합니다.

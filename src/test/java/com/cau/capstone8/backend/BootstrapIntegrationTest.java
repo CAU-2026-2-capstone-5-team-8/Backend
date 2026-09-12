@@ -39,6 +39,12 @@ class BootstrapIntegrationTest {
     private final ObjectMapper json = new ObjectMapper();
 
     @Test
+    void doesNotSeedCatalogWithoutDemoProfile() {
+        assertThat(jdbc.queryForObject("select count(*) from backend.book", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from backend.app_user", Long.class)).isZero();
+    }
+
+    @Test
     void initializesBackendSchemaThroughFlywayOnAnEmptyPostgresDatabase() {
         assertThat(jdbc.queryForObject(
                 "select exists(select 1 from information_schema.schemata where schema_name = 'backend')",

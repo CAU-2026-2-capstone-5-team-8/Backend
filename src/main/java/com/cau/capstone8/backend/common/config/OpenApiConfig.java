@@ -8,6 +8,6 @@ import org.springframework.context.annotation.Configuration;
 @OpenAPIDefinition(info = @Info(
         title = "CAU Capstone 8 Backend",
         version = "0.0.1",
-        description = "Reader assessment and book recommendation prototype. Stage 2: infrastructure only."))
+        description = "Reader assessment and book recommendation prototype. Stage 3: topic and book catalog reads."))
 public class OpenApiConfig {
 }
