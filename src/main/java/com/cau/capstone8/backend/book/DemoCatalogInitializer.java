@@ -25,5 +25,6 @@ public class DemoCatalogInitializer implements ApplicationRunner {
     public void run(ApplicationArguments arguments) {
         jdbc.execute("select pg_advisory_xact_lock(80320260912)");
         new ResourceDatabasePopulator(new ClassPathResource("db/demo/catalog.sql")).execute(dataSource);
+        new ResourceDatabasePopulator(new ClassPathResource("db/demo/questions.sql")).execute(dataSource);
     }
 }
