@@ -30,3 +30,5 @@ Implemented: topic/book catalog APIs (stage 3) and the assessment/question-bank 
 ## Collaboration
 
 Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). Feature branches only, PR into `main`; no direct commits/pushes to `main`. Error responses are always `{code, message, traceId}` with a **Korean** `message` and no leaked internals (stack traces, SQL, upstream URLs) — `common.error.ApiExceptionHandler` is the one place that maps exceptions to this shape.
+
+push 전 CI 결과는 항상 사용자 확인을 거친다 — PR을 올리고 CI(`.github/workflows/test.yml`)가 돌아간 뒤, 그 결과를 혼자 판단해서 다음 작업(추가 push, 머지 등)을 진행하지 않고 반드시 사용자에게 보여주고 확인받는다.
