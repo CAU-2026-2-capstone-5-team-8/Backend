@@ -32,3 +32,7 @@ Implemented: topic/book catalog APIs (stage 3) and the assessment/question-bank 
 Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). Feature branches only, PR into `main`; no direct commits/pushes to `main`. Error responses are always `{code, message, traceId}` with a **Korean** `message` and no leaked internals (stack traces, SQL, upstream URLs) — `common.error.ApiExceptionHandler` is the one place that maps exceptions to this shape.
 
 push 전 CI 결과는 항상 사용자 확인을 거친다 — PR을 올리고 CI(`.github/workflows/test.yml`)가 돌아간 뒤, 그 결과를 혼자 판단해서 다음 작업(추가 push, 머지 등)을 진행하지 않고 반드시 사용자에게 보여주고 확인받는다.
+
+PR 설명은 다음 구조를 따른다: **요약**(무엇을, 왜 바꿨는지) / **검증**(실제로 확인한 항목 체크리스트 — 원격 CI처럼 아직 확인 못한 항목은 "별도 확인 대상"으로 솔직히 표기) / **DB 변경**(새로 추가한 Flyway 마이그레이션 파일명과 각각이 하는 일).
+
+여러 명이 동시에 작업할 때는 마이그레이션 파일명이 겹치거나 순서가 꼬일 수 있다 — PR을 올리기 직전 `main` 기준 최신 마이그레이션 타임스탬프(`VyyyyMMddHHmmss`)를 확인하고, 겹치거나 `main`에 먼저 머지된 것보다 앞서면 파일명을 재조정한다.
