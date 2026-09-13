@@ -19,6 +19,17 @@ public class AssessmentQuestion {
 
     protected AssessmentQuestion() {}
 
+    public AssessmentQuestion(Long sessionId, Long questionId, int orderIndex, String promptSnapshot,
+                               String optionsSnapshot, String correctOptionIdSnapshot, String versionSnapshot) {
+        this.sessionId = sessionId;
+        this.questionId = questionId;
+        this.orderIndex = orderIndex;
+        this.promptSnapshot = promptSnapshot;
+        this.optionsSnapshot = optionsSnapshot;
+        this.correctOptionIdSnapshot = correctOptionIdSnapshot;
+        this.versionSnapshot = versionSnapshot;
+    }
+
     public Long getId() { return id; }
     public Long getSessionId() { return sessionId; }
     public Long getQuestionId() { return questionId; }

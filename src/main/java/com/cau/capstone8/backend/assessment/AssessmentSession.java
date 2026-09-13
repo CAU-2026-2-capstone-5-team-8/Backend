@@ -19,6 +19,12 @@ public class AssessmentSession {
 
     protected AssessmentSession() {}
 
+    public AssessmentSession(Long userId, Long topicId) {
+        this.userId = userId;
+        this.topicId = topicId;
+        this.status = AssessmentStatus.CREATED;
+    }
+
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public Long getTopicId() { return topicId; }
