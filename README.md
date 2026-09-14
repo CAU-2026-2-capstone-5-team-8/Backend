@@ -2,7 +2,9 @@
 
 Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당하는 독서 진단·추천 프로토타입입니다.
 
-현재 구현 범위는 **3단계 분야·도서 조회**입니다. 분야와 도서 목록·상세 API, 카탈로그 DB 제약, 선택적으로 활성화하는 합성 데모 데이터를 제공합니다. 진단·추천 API와 ML 계산은 이후 단계에서 구현합니다.
+현재 이 브랜치에는 **3단계 분야·도서 조회와 4단계 진단 생성·재조회·답변 저장**이 구현되어 있습니다. 총 6개 업무 API를 제공하며 진단은 `knowsConcept`(안다/모른다) 자기평가 방식입니다. 진단 완료·프로필·추천·ML 계산은 아직 구현 전입니다. 팀 저장소의 main 반영 여부는 PR 병합 상태를 별도로 확인해야 합니다.
+
+진단 API: `POST /api/assessments`, `GET /api/assessments/{sessionId}`, `PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}`. 답변 요청은 `{"knowsConcept": true}` 또는 `{"knowsConcept": false}`이며, 미응답은 조회 결과에서 `null`입니다. [현재 작동 방식](<docs/current-implementation-overview(작동 방식).md>)을 참고하세요.
 
 ## 요구 환경
 
@@ -160,4 +162,4 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 - [3단계 구현 계획](docs/superpowers/plans/2026-09-12-catalog.md)
 - [3단계 검증 결과](docs/verification-stage3.md)
 
-다음 단계는 4단계 진단 세션·문제 스냅샷·답변 저장과 재조회입니다. 이후 진단 완료·프로필, 추천·피드백, HTTP ML 순서로 구현합니다.
+다음은 4단계의 동시 요청·원본 문항 변경 후 스냅샷 보존 검증 보강과 5단계 진단 완료·프로필 구현입니다. 이후 추천·피드백, HTTP ML 순서로 구현합니다. 2026-09-14에 현재 코드의 PostgreSQL 통합 테스트 36개와 전체 빌드를 검증했습니다.

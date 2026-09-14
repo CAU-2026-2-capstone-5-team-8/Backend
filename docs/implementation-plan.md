@@ -1,5 +1,7 @@
 # Stage 2 implementation plan
 
+Historical plan: the statements below describe stage 2 only. For current branch implementation (catalog plus assessment create/get/answer), see the repository README. This is not a current progress report.
+
 Goal: a reproducible Java 21 backend that starts against PostgreSQL, applies Flyway migrations, publishes health/OpenAPI, and runs mandatory PostgreSQL integration tests in CI.
 
 Spec: [Approved design](design.md). Only stage 2 is being implemented. No business endpoints or demo data yet.
