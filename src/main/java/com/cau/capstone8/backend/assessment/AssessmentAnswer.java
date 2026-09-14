@@ -11,7 +11,14 @@ public class AssessmentAnswer {
 
     protected AssessmentAnswer() {}
 
+    public AssessmentAnswer(Long assessmentQuestionId, boolean knowsConcept) {
+        this.assessmentQuestionId = assessmentQuestionId;
+        this.knowsConcept = knowsConcept;
+    }
+
     public Long getId() { return id; }
     public Long getAssessmentQuestionId() { return assessmentQuestionId; }
     public boolean isKnowsConcept() { return knowsConcept; }
+
+    public void setKnowsConcept(boolean knowsConcept) { this.knowsConcept = knowsConcept; }
 }

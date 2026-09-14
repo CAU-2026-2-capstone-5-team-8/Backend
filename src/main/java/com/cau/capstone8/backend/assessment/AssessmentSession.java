@@ -33,4 +33,6 @@ public class AssessmentSession {
     public OffsetDateTime getProcessingExpiresAt() { return processingExpiresAt; }
     public String getLastFailureCode() { return lastFailureCode; }
     public String getLastFailureMessage() { return lastFailureMessage; }
+
+    public void setStatus(AssessmentStatus status) { this.status = status; }
 }

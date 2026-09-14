@@ -66,6 +66,33 @@ public class AssessmentService {
         return toResponse(session, issued, knownByQuestionId);
     }
 
+    @Transactional
+    public AssessmentResponse.IssuedQuestion answer(long sessionId, long assessmentQuestionId, boolean knowsConcept) {
+        // Lock the session row so a concurrent answer write or completion can't race this update (design.md).
+        AssessmentSession session = sessions.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("진단 세션을 찾을 수 없습니다."));
+        AssessmentQuestion question = assessmentQuestions.findById(assessmentQuestionId)
+                .filter(q -> q.getSessionId().equals(sessionId))
+                .orElseThrow(() -> new ResourceNotFoundException("발급된 문항을 찾을 수 없습니다."));
+
+        if (session.getStatus() == AssessmentStatus.PROCESSING || session.getStatus() == AssessmentStatus.COMPLETED) {
+            throw new AssessmentStateConflictException("완료되었거나 처리 중인 세션은 답변을 수정할 수 없습니다.");
+        }
+        if (session.getStatus() == AssessmentStatus.CREATED) {
+            session.setStatus(AssessmentStatus.IN_PROGRESS);
+        }
+
+        var existing = answers.findByAssessmentQuestionId(assessmentQuestionId);
+        if (existing.isPresent()) {
+            existing.get().setKnowsConcept(knowsConcept);
+        } else {
+            answers.save(new AssessmentAnswer(assessmentQuestionId, knowsConcept));
+        }
+
+        return new AssessmentResponse.IssuedQuestion(question.getId(), question.getOrderIndex(),
+                question.getMeasurementAreaSnapshot().name(), question.getPromptSnapshot(), knowsConcept);
+    }
+
     private AssessmentResponse toResponse(AssessmentSession session, List<AssessmentQuestion> issued,
                                            Map<Long, Boolean> knownByQuestionId) {
         List<AssessmentResponse.IssuedQuestion> issuedQuestions = issued.stream()

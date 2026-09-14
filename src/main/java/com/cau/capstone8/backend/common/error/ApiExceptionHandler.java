@@ -1,5 +1,6 @@
 package com.cau.capstone8.backend.common.error;
 
+import com.cau.capstone8.backend.assessment.AssessmentStateConflictException;
 import com.cau.capstone8.backend.assessment.QuestionBankUnavailableException;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -23,6 +24,10 @@ public class ApiExceptionHandler {
     @ExceptionHandler(QuestionBankUnavailableException.class)
     ResponseEntity<ApiError> questionBankUnavailable(QuestionBankUnavailableException ex) {
         return error(409, "QUESTION_BANK_UNAVAILABLE", ex.getMessage());
+    }
+    @ExceptionHandler(AssessmentStateConflictException.class)
+    ResponseEntity<ApiError> assessmentStateConflict(AssessmentStateConflictException ex) {
+        return error(409, "ASSESSMENT_STATE_CONFLICT", ex.getMessage());
     }
     @ExceptionHandler({HandlerMethodValidationException.class, MethodArgumentTypeMismatchException.class,
             MissingServletRequestParameterException.class})
