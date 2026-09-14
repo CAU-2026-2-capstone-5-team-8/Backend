@@ -1,30 +1,29 @@
 # 남은 구현 단계 분석 (4~8단계)
 
-작성일: 2026-09-13. 이 문서는 계획 문서이며 아직 구현되지 않았다. 근거는 [설계 문서](design.md)의 데이터 모델·공개 계약·ML 계약·진단 상태 전이 절이다. 코드를 먼저 확인하지 않고 이 문서만으로 구현 여부를 판단하지 말 것 — `CLAUDE.md`의 "Current stage" 절 참고.
+갱신일: 2026-09-14. 현재 구현과 앞으로의 계획을 구분한다. 기준 코드는 PR #2의 b06da70이며, main 병합 여부와는 별개다.
 
-## 현재 상태 (기준: 커밋 `c11983c`)
+## 현재 상태
 
-- 완료: 3단계(분야·도서 카탈로그), 4단계 중 `POST /api/assessments`(세션 생성 + 9문항 스냅샷 발급)
-- 미완료: 4단계 나머지(조회, 답변 저장), 5~8단계 전체
+- 구현됨: 카탈로그 조회 3개, 진단 생성·재조회·답변 저장 3개, 총 6개 API.
+- 검증됨: PostgreSQL 통합 테스트 36개와 전체 빌드 통과.
+- 미구현: 5~8단계의 진단 완료·프로필·추천·ML 연동·전체 E2E.
 
-## 4단계 나머지 — 답변 저장·재조회
+## 4단계 — 구현된 답변 저장·재조회와 남은 검증
 
 ### GET /api/assessments/{sessionId}
-- `AssessmentSessionRepository`/`AssessmentQuestionRepository`/`AssessmentAnswerRepository`를 조합해 세션 상태, 발급된 9문항(정답 키 제외), 문항별 저장된 답변(있는 경우)을 반환
-- 존재하지 않는 sessionId → 404
-- 응답 구조는 `POST /api/assessments`의 `AssessmentResponse`를 재사용하거나 확장 (저장된 `selectedOptionId` 필드 추가)
+- 세션 상태와 발급 문항, 저장된 `knowsConcept`를 반환한다. 미응답은 `null`이다.
+- 존재하지 않는 세션은 404다.
 
 ### PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}
-- 요청: `selectedOptionId` (문항 스냅샷의 옵션 목록에 실제로 존재하는 값인지 검증 — 없으면 400)
-- `assessmentQuestionId`가 해당 `sessionId`에 속하는지 검증 (다른 세션 소속이면 404 또는 400)
-- **세션 상태 전이**: 첫 답변 저장 시 `CREATED → IN_PROGRESS` (설계 문서 "진단 상태 전이" 절)
-- **처리 중/완료 상태에서는 답변 수정 불가** — `PROCESSING`/`COMPLETED` 상태에서 PUT 요청 시 409
-- 같은 문항에 대한 재제출은 UPSERT(교체) — DB에 이미 `assessment_answer.assessment_question_id UNIQUE` 제약이 있으므로 서비스 계층에서 존재 여부 확인 후 update/insert 분기 필요
-- **동시성**: 설계 문서는 "답변 저장과 완료 요청은 같은 세션 행을 짧은 트랜잭션으로 잠근다"고 명시 — `SELECT ... FOR UPDATE` 또는 낙관적 락 검토 필요
+- 요청은 `{"knowsConcept": true}` 또는 `{"knowsConcept": false}`다. 누락/null은 400이다.
+- 다른 세션 소속 문항은 404, 처리 중·완료된 세션은 409다.
+- 첫 답변 저장 시 CREATED → IN_PROGRESS로 전환하고, 재제출은 기존 답변을 교체한다.
+- 세션 행에 비관적 쓰기 잠금을 사용한다. 완료 API도 구현 시 같은 잠금을 사용해야 한다.
 
-### 이번 4단계에서 아직 안 건드린 것
-- 상태 전이 로직 자체 (지금은 세션이 항상 `CREATED`로 생성되고 끝)
-- 답변 유효성 검증 (옵션 존재 여부)
+### 아직 보강할 검증
+- 서로 다른 연결에서 같은 문항을 동시에 제출해 중복 없이 저장되는지 확인.
+- 문항 원본 변경 후 기존 세션의 문항·영역·버전 스냅샷이 유지되는지 확인.
+- 실제 완료 API가 추가되면 답변 저장과 완료 요청 경쟁 검증.
 
 ## 5단계 — 진단 완료·프로필 계산
 
@@ -46,8 +45,8 @@
 
 ### 필요한 새 구성 요소
 - `reader_profile` 테이블 마이그레이션 (세션 UNIQUE, 능력 3종, 계산 버전, evidence JSONB)
-- `MlGateway` 인터페이스 + `ml.mode=stub` 구현체 (설계 문서의 stub 프로필 공식: 정답 수/발급 수, 문항당 1점)
-- 세션 잠금을 위한 `SELECT ... FOR UPDATE` 또는 비관적 락 전략 확정
+- `MlGateway` 인터페이스 + `ml.mode=stub` 구현체 (설계 문서의 stub 프로필 공식: 영역별 안다 응답 수/발급 수, 문항당 1점)
+- 기존 `findByIdForUpdate` 비관적 잠금을 완료 처리에도 재사용
 
 ## 6단계 — 추천·피드백
 
@@ -89,7 +88,7 @@
 1. 완료 시 9개 답변 미충족 상태 코드 (400 vs 409)
 2. 프로필 없음 조회의 상태 코드 (404 vs 추천 쪽 409와의 일관성)
 3. 피드백 소유자 불일치 시 상태 코드 (403 부재)
-4. 세션 잠금 구현 방식 (`SELECT FOR UPDATE` vs 낙관적 락 + 재시도)
+4. 현재 세션 비관적 잠금과 완료 처리의 트랜잭션 경계·경쟁 테스트
 
 ## 다른 레포·팀 진행 상황 (백엔드 관련) — 2026-09-14 확인
 

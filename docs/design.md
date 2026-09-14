@@ -4,7 +4,7 @@ Approved in the task on 2026-09-12. This repository is implemented in stages; th
 
 ## Scope and boundaries
 
-One assessed topic (operating systems), nine single-choice questions (three per dimension), five demo books, one demo user. Computer science is the classification parent. Spring Boot owns all public APIs, PostgreSQL, snapshots, validation, and persistence. Python only calculates a reader profile and rankings from supplied inputs. Clients never access Python directly. Stub mode must run without Python. Authentication, OCR, real ML training, Redis, Kafka, cloud deployment, and adaptive questions are excluded.
+One assessed topic (operating systems), nine known/unknown self-report questions (three per dimension), five demo books, one demo user. Computer science is the classification parent. Spring Boot owns all public APIs, PostgreSQL, snapshots, validation, and persistence. Python only calculates a reader profile and rankings from supplied inputs. Clients never access Python directly. Stub mode must run without Python. Authentication, OCR, real ML training, Redis, Kafka, cloud deployment, and adaptive questions are excluded.
 
 Use Java 21, Spring Boot 4.1.1 / MVC, Gradle 8.14.3, PostgreSQL 17.11, JPA, Flyway, RestClient, springdoc 3.1.1. Use Boot's dependency management for its managed libraries and WireMock standalone 3.13.2 when the HTTP adapter is implemented. Feature packages live under `com.cau.capstone8.backend`.
 
@@ -46,14 +46,14 @@ Answer writes and complete claims lock the same session row in a short transacti
 | GET /api/books/{bookId} | positive ID | 200 book/topics/feature availability |
 | POST /api/assessments | userId, topicId | 201 session and nine issued questions |
 | GET /api/assessments/{sessionId} | positive ID | 200 state/questions/saved answers |
-| PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId} | selectedOptionId | 200 saved answer |
+| PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId} | knowsConcept: boolean (required, non-null) | 200 issued question with saved answer |
 | POST /api/assessments/{sessionId}/complete | no body | 200 completed session/profile, including retries |
 | GET /api/users/{userId}/profiles/{topicId} | positive IDs | 200 latest completed profile |
 | POST /api/recommendations | userId, topicId, targetBookId?, challengeLevel, topK=5; Idempotency-Key | 201 new success, 200 previous success |
 | GET /api/recommendations/{runId} | positive ID | 200 status/results or sanitized failure |
 | POST /api/recommendations/{itemId}/feedback | userId, helpful, comment? | 201 new, 200 replacement |
 
-IDs are positive; page >= 0; size 1..100; topK 1..20; comment <= 1000 characters. Never expose answer keys or grading criteria. MVP user IDs are not authentication; document migration to authenticated `/api/me`. Feedback user must match the recommendation owner.
+IDs are positive; page >= 0; size 1..100; topK 1..20; comment <= 1000 characters. Assessment answers use `{"knowsConcept": true}` or `{"knowsConcept": false}`; missing/null values return 400. An unanswered issued question has `knowsConcept: null` in the create/get response. These are self-reports, not objectively graded answers. MVP user IDs are not authentication; document migration to authenticated `/api/me`. Feedback user must match the recommendation owner.
 
 Latest profile is selected by completion time then ID. Top-K uses books directly assigned to the topic and compatible active features. A target book must belong to the requested topic; target mode ignores topK and returns one result. Exclude featureless Top-K candidates and record counts. Return fewer results when fewer are available. No eligible candidates / missing target features -> 422; no profile -> 409. Ranking snapshots fix the selected profile, feature values and versions, configuration, and ML mode/model version. Same key/body returns the same run; different body -> 409; processing -> 409; failed -> replay saved failure. A new key starts a new calculation. Expired processing runs become FAILED on access/replay; late results cannot finalize them. Results and success state commit together; persist failures independently of rolled-back result inserts.
 

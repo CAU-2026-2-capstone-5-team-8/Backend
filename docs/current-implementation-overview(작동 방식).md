@@ -1,4 +1,4 @@
-# 지금 구현된 것 설명 (2026-09-13 기준)
+# 지금 구현된 것 설명 (2026-09-14 기준)
 
 이 문서는 "지금 백엔드가 실제로 뭘 하는지"를 이해하기 위한 설명 문서다. 미래 계획은 [remaining-work-analysis.md](remaining-work-analysis.md), 전체 목표 계약은 [design.md](design.md) 참고.
 
@@ -48,7 +48,7 @@ GET /api/books/{bookId}
 
 존재하지 않는 ID면 404. 있으면 도서 정보 + 소속 분야별 feature 활성화 여부.
 
-### 2-4. 진단 세션 생성 — 오늘 새로 만든 기능
+### 2-4. 진단 세션 생성
 
 ```
 POST /api/assessments
@@ -62,10 +62,10 @@ Body: { "userId": 1, "topicId": 2 }
 3. 그 분야의 문제 은행(`question` 테이블)에서 **측정 영역(어휘/배경지식/독해)마다 3문항씩, 총 9문항을 무작위로 뽑는다**
    - 만약 어느 한 영역이라도 활성 문항이 3개 미만이면 → 409 에러 (문제 은행이 준비 안 된 분야)
 4. `assessment_session` 테이블에 새 세션 행을 만든다 (상태는 항상 `CREATED`로 시작)
-5. 뽑은 9문항을 `assessment_question` 테이블에 "스냅샷"으로 복사해서 저장한다 — 나중에 원본 문제가 수정되거나 삭제돼도 이 세션에서 실제로 보여준 문제 내용은 그대로 보존된다는 뜻
+5. 뽑은 9문항을 `assessment_question` 테이블에 "스냅샷"으로 복사해서 저장한다 — 나중에 원본 문제가 수정돼도 이 세션에서 실제로 보여준 문제 내용은 그대로 보존된다는 뜻
 6. 응답으로 세션 정보 + 9문항을 돌려준다
 
-**문항 형식(2026-09-14 변경)**: 4지선다 객관식이 아니라 **"안다/모른다" 자기평가** 방식으로 바뀌었다. 그래서 문항에 보기(options)나 정답이 아예 없다 — 채점 대상이 아니라 사용자가 스스로 아는지 표시하는 방식이기 때문이다. 교수님 면담에서 나온 "시험처럼 느껴지면 피로도가 높아 접근성이 떨어진다"는 의견을 반영해 팀이 합의한 방향이다 (비교 근거는 [assessment-format-comparison.md](assessment-format-comparison.md)).
+**문항 형식(2026-09-14 변경)**: 4지선다 객관식이 아니라 **"안다/모른다" 자기평가** 방식으로 바뀌었다. 그래서 문항에 보기(options)나 정답이 아예 없다 — 채점 대상이 아니라 사용자가 스스로 아는지 표시하는 방식이기 때문이다. 교수님 면담에서 나온 "시험처럼 느껴지면 피로도가 높아 접근성이 떨어진다"는 의견을 반영해 팀이 합의한 방향이다 (비교 근거는 [문항 방식 비교](<assessment-format-comparison(문제 선다 방식).md>)).
 
 응답 예시:
 
@@ -105,7 +105,7 @@ Body: { "knowsConcept": true }
 2. 세션이 `PROCESSING`/`COMPLETED` 상태면 409 (더 이상 답변 수정 불가)
 3. 첫 답변이면 세션 상태가 `CREATED → IN_PROGRESS`로 바뀜
 4. 같은 문항에 다시 답하면 기존 값을 덮어씀(교체) — 행이 늘어나지 않음
-5. 동시에 같은 세션에 답변/완료 요청이 들어오면 DB 행 잠금(`SELECT ... FOR UPDATE`)으로 순서를 보장함
+5. 답변 저장은 세션 행 잠금(`SELECT ... FOR UPDATE`)을 사용함. 완료 API는 아직 없으며, 추가할 때 같은 잠금을 사용해야 함
 
 이 API까지가 지금 실제로 되는 것이고, **진단 완료 처리(`POST .../complete`)는 아직 없다.**
 
@@ -117,9 +117,9 @@ Body: { "knowsConcept": true }
 | `topic` | 데이터 있음 | CS, OS 2개 (데모) |
 | `book`, `book_topic`, `book_sample`, `book_feature` | 데이터 있음 | 합성 도서 5권 (실제 출판물 아님) |
 | `question` | 데이터 있음 | OS 분야 9문항 (데모) |
-| `assessment_session` | **오늘부터 실제로 행이 생김** | `POST /api/assessments` 호출할 때마다 |
-| `assessment_question` | **오늘부터 실제로 행이 생김** | 세션당 9행 |
-| `assessment_answer` | **오늘부터 실제로 행이 생김** | `PUT .../answers/...` 호출할 때마다 |
+| `assessment_session` | 호출 시 저장 | `POST /api/assessments` 호출할 때마다 |
+| `assessment_question` | 호출 시 저장 | 세션당 9행 |
+| `assessment_answer` | 호출 시 저장 | `PUT .../answers/...` 호출할 때마다 |
 | `reader_profile`, `recommendation_run`, `recommendation_item`, `feedback` | **테이블 자체가 아직 없음** | 5~6단계에서 마이그레이션부터 추가해야 함 |
 
 ## 4. 아직 안 되는 것 (자주 헷갈리는 부분 정리)
