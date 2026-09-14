@@ -21,6 +21,8 @@ CREATE TABLE assessment_question (
     session_id bigint NOT NULL REFERENCES assessment_session(id),
     question_id bigint NOT NULL REFERENCES question(id),
     order_index int NOT NULL CHECK (order_index >= 0),
+    measurement_area_snapshot varchar(40) NOT NULL
+        CHECK (measurement_area_snapshot IN ('VOCABULARY','BACKGROUND_KNOWLEDGE','COMPREHENSION')),
     prompt_snapshot text NOT NULL CHECK (btrim(prompt_snapshot) <> ''),
     version_snapshot varchar(80) NOT NULL CHECK (btrim(version_snapshot) <> ''),
     created_at timestamptz NOT NULL DEFAULT now(),

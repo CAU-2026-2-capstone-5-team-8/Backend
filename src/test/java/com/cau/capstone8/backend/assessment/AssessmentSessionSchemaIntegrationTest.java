@@ -27,8 +27,8 @@ class AssessmentSessionSchemaIntegrationTest {
         long session = newSession();
         long question = questionId("os-vocab-1");
         long assessmentQuestion = jdbc.queryForObject("""
-                insert into backend.assessment_question(session_id,question_id,order_index,prompt_snapshot,version_snapshot)
-                select ?,id,0,prompt,version from backend.question where id=? returning id
+                insert into backend.assessment_question(session_id,question_id,order_index,measurement_area_snapshot,prompt_snapshot,version_snapshot)
+                select ?,id,0,measurement_area,prompt,version from backend.question where id=? returning id
                 """, Long.class, session, question);
         jdbc.update("insert into backend.assessment_answer(assessment_question_id,knows_concept) values (?,?)",
                 assessmentQuestion, true);
@@ -44,10 +44,10 @@ class AssessmentSessionSchemaIntegrationTest {
         long session = newSession();
         long question = questionId("os-vocab-1");
         issue(session, question, 0);
-        rejects("insert into backend.assessment_question(session_id,question_id,order_index,prompt_snapshot,version_snapshot) "
-                + "select " + session + ",id,0,prompt,version from backend.question where id=" + questionId("os-vocab-2"));
-        rejects("insert into backend.assessment_question(session_id,question_id,order_index,prompt_snapshot,version_snapshot) "
-                + "select " + session + ",id,1,prompt,version from backend.question where id=" + question);
+        rejects("insert into backend.assessment_question(session_id,question_id,order_index,measurement_area_snapshot,prompt_snapshot,version_snapshot) "
+                + "select " + session + ",id,0,measurement_area,prompt,version from backend.question where id=" + questionId("os-vocab-2"));
+        rejects("insert into backend.assessment_question(session_id,question_id,order_index,measurement_area_snapshot,prompt_snapshot,version_snapshot) "
+                + "select " + session + ",id,1,measurement_area,prompt,version from backend.question where id=" + question);
     }
 
     @Test void rejectsMoreThanOneAnswerPerIssuedQuestion() {
@@ -66,8 +66,8 @@ class AssessmentSessionSchemaIntegrationTest {
 
     long issue(long session, long question, int orderIndex) {
         return jdbc.queryForObject("""
-                insert into backend.assessment_question(session_id,question_id,order_index,prompt_snapshot,version_snapshot)
-                select ?,id,?,prompt,version from backend.question where id=? returning id
+                insert into backend.assessment_question(session_id,question_id,order_index,measurement_area_snapshot,prompt_snapshot,version_snapshot)
+                select ?,id,?,measurement_area,prompt,version from backend.question where id=? returning id
                 """, Long.class, session, orderIndex, question);
     }
 

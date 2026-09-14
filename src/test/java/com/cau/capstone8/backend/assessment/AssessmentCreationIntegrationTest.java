@@ -35,9 +35,15 @@ class AssessmentCreationIntegrationTest {
         assertThat(body.path("topicId").asLong()).isEqualTo(topic("OS"));
         var questions = body.path("questions");
         assertThat(questions.size()).isEqualTo(9);
+        var areaCounts = new java.util.HashMap<String, Integer>();
         for (var q : questions) {
             assertThat(q.path("prompt").asString()).isNotBlank();
+            String area = q.path("measurementArea").asString();
+            assertThat(area).isIn("VOCABULARY", "BACKGROUND_KNOWLEDGE", "COMPREHENSION");
+            areaCounts.merge(area, 1, Integer::sum);
         }
+        assertThat(areaCounts).containsExactlyInAnyOrderEntriesOf(
+                java.util.Map.of("VOCABULARY", 3, "BACKGROUND_KNOWLEDGE", 3, "COMPREHENSION", 3));
         assertThat(response.body()).doesNotContain("correctOptionId", "answerKey", "options");
     }
 

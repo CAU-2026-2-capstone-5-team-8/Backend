@@ -43,7 +43,7 @@ public class AssessmentService {
         List<AssessmentQuestion> issued = new ArrayList<>();
         for (int i = 0; i < sampled.size(); i++) {
             Question q = sampled.get(i);
-            issued.add(new AssessmentQuestion(session.getId(), q.getId(), i, q.getPrompt(), q.getVersion()));
+            issued.add(new AssessmentQuestion(session.getId(), q.getId(), i, q.getMeasurementArea(), q.getPrompt(), q.getVersion()));
         }
         assessmentQuestions.saveAll(issued);
 
@@ -52,7 +52,8 @@ public class AssessmentService {
 
     private AssessmentResponse toResponse(AssessmentSession session, List<AssessmentQuestion> issued) {
         List<AssessmentResponse.IssuedQuestion> issuedQuestions = issued.stream()
-                .map(q -> new AssessmentResponse.IssuedQuestion(q.getId(), q.getOrderIndex(), q.getPromptSnapshot()))
+                .map(q -> new AssessmentResponse.IssuedQuestion(q.getId(), q.getOrderIndex(),
+                        q.getMeasurementAreaSnapshot().name(), q.getPromptSnapshot()))
                 .toList();
         return new AssessmentResponse(session.getId(), session.getUserId(), session.getTopicId(),
                 session.getStatus().name(), issuedQuestions);

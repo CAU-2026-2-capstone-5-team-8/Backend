@@ -79,6 +79,7 @@ Body: { "userId": 1, "topicId": 2 }
     {
       "id": 41,
       "orderIndex": 0,
+      "measurementArea": "VOCABULARY",
       "prompt": "\"교착 상태(deadlock)\"라는 용어의 뜻을 알고 있습니까?"
     }
   ]
