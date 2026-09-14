@@ -5,24 +5,30 @@ import com.cau.capstone8.backend.topic.TopicRepository;
 import com.cau.capstone8.backend.user.AppUserRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional(readOnly = true)
 public class AssessmentService {
     private static final int QUESTIONS_PER_AREA = 3;
     private static final int TOTAL_QUESTIONS = QUESTIONS_PER_AREA * MeasurementArea.values().length;
 
     private final AssessmentSessionRepository sessions;
     private final AssessmentQuestionRepository assessmentQuestions;
+    private final AssessmentAnswerRepository answers;
     private final QuestionRepository questions;
     private final TopicRepository topics;
     private final AppUserRepository users;
 
     public AssessmentService(AssessmentSessionRepository sessions, AssessmentQuestionRepository assessmentQuestions,
-                              QuestionRepository questions, TopicRepository topics, AppUserRepository users) {
+                              AssessmentAnswerRepository answers, QuestionRepository questions,
+                              TopicRepository topics, AppUserRepository users) {
         this.sessions = sessions;
         this.assessmentQuestions = assessmentQuestions;
+        this.answers = answers;
         this.questions = questions;
         this.topics = topics;
         this.users = users;
@@ -47,13 +53,24 @@ public class AssessmentService {
         }
         assessmentQuestions.saveAll(issued);
 
-        return toResponse(session, issued);
+        return toResponse(session, issued, Map.of());
     }
 
-    private AssessmentResponse toResponse(AssessmentSession session, List<AssessmentQuestion> issued) {
+    public AssessmentResponse get(long sessionId) {
+        AssessmentSession session = sessions.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("진단 세션을 찾을 수 없습니다."));
+        List<AssessmentQuestion> issued = assessmentQuestions.findBySessionIdOrderByOrderIndex(sessionId);
+        Map<Long, Boolean> knownByQuestionId = answers
+                .findByAssessmentQuestionIdIn(issued.stream().map(AssessmentQuestion::getId).toList()).stream()
+                .collect(Collectors.toMap(AssessmentAnswer::getAssessmentQuestionId, AssessmentAnswer::isKnowsConcept));
+        return toResponse(session, issued, knownByQuestionId);
+    }
+
+    private AssessmentResponse toResponse(AssessmentSession session, List<AssessmentQuestion> issued,
+                                           Map<Long, Boolean> knownByQuestionId) {
         List<AssessmentResponse.IssuedQuestion> issuedQuestions = issued.stream()
                 .map(q -> new AssessmentResponse.IssuedQuestion(q.getId(), q.getOrderIndex(),
-                        q.getMeasurementAreaSnapshot().name(), q.getPromptSnapshot()))
+                        q.getMeasurementAreaSnapshot().name(), q.getPromptSnapshot(), knownByQuestionId.get(q.getId())))
                 .toList();
         return new AssessmentResponse(session.getId(), session.getUserId(), session.getTopicId(),
                 session.getStatus().name(), issuedQuestions);

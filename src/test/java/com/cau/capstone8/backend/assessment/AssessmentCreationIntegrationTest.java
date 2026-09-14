@@ -61,6 +61,29 @@ class AssessmentCreationIntegrationTest {
         assertThat(post(user(), -1).statusCode()).isEqualTo(400);
     }
 
+    @Test void returnsCreatedSessionWithUnansweredQuestionsOnGet() throws Exception {
+        long sessionId = json.readTree(post(user(), topic("OS")).body()).path("id").asLong();
+
+        var response = get(sessionId);
+        assertThat(response.statusCode()).isEqualTo(200);
+        var body = json.readTree(response.body());
+        assertThat(body.path("id").asLong()).isEqualTo(sessionId);
+        assertThat(body.path("status").asString()).isEqualTo("CREATED");
+        var questions = body.path("questions");
+        assertThat(questions.size()).isEqualTo(9);
+        for (var q : questions) {
+            assertThat(q.path("knowsConcept").isNull()).isTrue();
+        }
+    }
+
+    @Test void returns404ForUnknownSession() throws Exception {
+        assertThat(get(9223372036854775807L).statusCode()).isEqualTo(404);
+    }
+
+    @Test void rejectsNonPositiveSessionId() throws Exception {
+        assertThat(get(0).statusCode()).isEqualTo(400);
+    }
+
     long user() { return jdbc.queryForObject("select id from backend.app_user limit 1", Long.class); }
     long topic(String code) { return jdbc.queryForObject("select id from backend.topic where code=?", Long.class, code); }
 
@@ -71,6 +94,13 @@ class AssessmentCreationIntegrationTest {
                     .POST(HttpRequest.BodyPublishers.ofString(
                             "{\"userId\":" + userId + ",\"topicId\":" + topicId + "}"))
                     .build(), HttpResponse.BodyHandlers.ofString());
+        }
+    }
+
+    HttpResponse<String> get(long sessionId) throws Exception {
+        try (var client = HttpClient.newHttpClient()) {
+            return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/assessments/" + sessionId))
+                    .timeout(Duration.ofSeconds(10)).GET().build(), HttpResponse.BodyHandlers.ofString());
         }
     }
 }
