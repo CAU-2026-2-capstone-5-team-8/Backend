@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class AssessmentService {
@@ -19,17 +18,14 @@ public class AssessmentService {
     private final QuestionRepository questions;
     private final TopicRepository topics;
     private final AppUserRepository users;
-    private final ObjectMapper json;
 
     public AssessmentService(AssessmentSessionRepository sessions, AssessmentQuestionRepository assessmentQuestions,
-                              QuestionRepository questions, TopicRepository topics, AppUserRepository users,
-                              ObjectMapper json) {
+                              QuestionRepository questions, TopicRepository topics, AppUserRepository users) {
         this.sessions = sessions;
         this.assessmentQuestions = assessmentQuestions;
         this.questions = questions;
         this.topics = topics;
         this.users = users;
-        this.json = json;
     }
 
     @Transactional
@@ -47,8 +43,7 @@ public class AssessmentService {
         List<AssessmentQuestion> issued = new ArrayList<>();
         for (int i = 0; i < sampled.size(); i++) {
             Question q = sampled.get(i);
-            issued.add(new AssessmentQuestion(session.getId(), q.getId(), i, q.getPrompt(), q.getOptions(),
-                    q.getCorrectOptionId(), q.getVersion()));
+            issued.add(new AssessmentQuestion(session.getId(), q.getId(), i, q.getPrompt(), q.getVersion()));
         }
         assessmentQuestions.saveAll(issued);
 
@@ -57,8 +52,7 @@ public class AssessmentService {
 
     private AssessmentResponse toResponse(AssessmentSession session, List<AssessmentQuestion> issued) {
         List<AssessmentResponse.IssuedQuestion> issuedQuestions = issued.stream()
-                .map(q -> new AssessmentResponse.IssuedQuestion(q.getId(), q.getOrderIndex(), q.getPromptSnapshot(),
-                        json.readTree(q.getOptionsSnapshot())))
+                .map(q -> new AssessmentResponse.IssuedQuestion(q.getId(), q.getOrderIndex(), q.getPromptSnapshot()))
                 .toList();
         return new AssessmentResponse(session.getId(), session.getUserId(), session.getTopicId(),
                 session.getStatus().name(), issuedQuestions);

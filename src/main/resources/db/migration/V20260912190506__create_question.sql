@@ -5,14 +5,11 @@ CREATE TABLE question (
         CHECK (measurement_area IN ('VOCABULARY','BACKGROUND_KNOWLEDGE','COMPREHENSION')),
     difficulty int NOT NULL CHECK (difficulty BETWEEN 1 AND 5),
     prompt text NOT NULL CHECK (btrim(prompt) <> ''),
-    options jsonb NOT NULL CHECK (jsonb_typeof(options) = 'array'),
-    correct_option_id varchar(20) NOT NULL CHECK (btrim(correct_option_id) <> ''),
     version varchar(80) NOT NULL CHECK (btrim(version) <> ''),
     active boolean NOT NULL DEFAULT false,
     demo_key varchar(80) UNIQUE,
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-    CHECK (options @> jsonb_build_array(jsonb_build_object('id', correct_option_id)))
+    updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- Assessment session creation reads only the active question set for a topic/area.

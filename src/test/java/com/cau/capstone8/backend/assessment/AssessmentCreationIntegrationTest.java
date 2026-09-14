@@ -37,9 +37,8 @@ class AssessmentCreationIntegrationTest {
         assertThat(questions.size()).isEqualTo(9);
         for (var q : questions) {
             assertThat(q.path("prompt").asString()).isNotBlank();
-            assertThat(q.path("options").isArray()).isTrue();
         }
-        assertThat(response.body()).doesNotContain("correctOptionId", "answerKey");
+        assertThat(response.body()).doesNotContain("correctOptionId", "answerKey", "options");
     }
 
     @Test void rejectsUnknownUserOrTopic() throws Exception {

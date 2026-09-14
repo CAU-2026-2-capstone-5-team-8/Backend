@@ -7,11 +7,11 @@ import jakarta.persistence.*;
 public class AssessmentAnswer {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(name = "assessment_question_id", nullable = false, unique = true) private Long assessmentQuestionId;
-    @Column(name = "selected_option_id", nullable = false, length = 20) private String selectedOptionId;
+    @Column(name = "knows_concept", nullable = false) private boolean knowsConcept;
 
     protected AssessmentAnswer() {}
 
     public Long getId() { return id; }
     public Long getAssessmentQuestionId() { return assessmentQuestionId; }
-    public String getSelectedOptionId() { return selectedOptionId; }
+    public boolean isKnowsConcept() { return knowsConcept; }
 }
