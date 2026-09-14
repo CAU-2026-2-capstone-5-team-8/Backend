@@ -20,10 +20,10 @@ All core tables have generated IDs and UTC-compatible `timestamptz` creation/upd
 | book_topic | unique book/topic, is_primary, topic_weight; at most one primary topic per book |
 | book_sample | book, source URL, location, checksum, provenance; identify synthetic data |
 | book_feature | book/topic/version unique, active flag, three required abilities, topic relevance; at most one active feature per book/topic |
-| question | topic, dimension, prompt, options, answer key, version, active flag |
+| question | topic, dimension, prompt, version, active flag (self-report: no options/answer key) |
 | assessment_session | user, topic, status, attempt ID, processing expiry, last failure |
-| assessment_question | session, source question, order, immutable prompt/options/grading/dimension/version snapshot; unique session/question and session/order |
-| assessment_answer | unique assessment_question, selected option |
+| assessment_question | session, source question, order, immutable prompt/dimension/version snapshot; unique session/question and session/order |
+| assessment_answer | unique assessment_question, self-reported known/unknown response |
 | reader_profile | unique session, three abilities, calculation version, evidence; user/topic derived from session |
 | recommendation_run | user, topic, profile, status, request key/hash, input snapshot, model version; unique user/request key |
 | recommendation_item | run, book, feature, rank, scores, reasons; unique run/book and run/rank |
@@ -63,9 +63,9 @@ Errors contain `code`, Korean `message`, and server-generated `traceId`. 400 inv
 
 `MlGateway` has profile and rank operations. `ml.mode=stub` selects deterministic in-process behavior; `http` selects RestClient. Both implementations share response validation. No automatic fallback from HTTP to stub and no automatic HTTP retries. Connect timeout 2s; response timeout 10s; attempt lease 30s.
 
-Both internal endpoints use `contractVersion=v1` and echo a UUID requestId. `/ml/reader-profile` receives topic and issued question dimension/selected answer/answer key/points; returns calculation version, three ability scores, dimension counts, and evidence. `/ml/rank` receives the fixed profile and version, candidate book features and versions, challenge level, and topK; returns model version, ranked book IDs, total/component scores, and multiple reasons. Reject missing fields, non-finite/out-of-range numbers, duplicate/unrequested books, wrong result counts/ranks, and incompatible versions.
+Both internal endpoints use `contractVersion=v1` and echo a UUID requestId. `/ml/reader-profile` receives topic and issued question dimension/self-reported known-or-not response/points; returns calculation version, three ability scores, dimension counts, and evidence. `/ml/rank` receives the fixed profile and version, candidate book features and versions, challenge level, and topK; returns model version, ranked book IDs, total/component scores, and multiple reasons. Reject missing fields, non-finite/out-of-range numbers, duplicate/unrequested books, wrong result counts/ranks, and incompatible versions.
 
-Stub profile = correct count / issued count per dimension. All questions have one point. Target ability = clamp(profile ability + challenge offset, 0, 1), with COMFORTABLE=-0.2, BALANCED=0, CHALLENGING=+0.2. Dimension fit = 1 - abs(book requirement - target ability). Topic fit = feature topic relevance. Total = arithmetic mean of four fits. Sort descending score then ascending book ID. Return at least two reasons grounded in component scores. Versions are `stub-profile-v1` and `stub-rank-v1`. These are demo rules, not scientifically validated measurements.
+Stub profile = known-response count / issued count per dimension. All questions have one point. Target ability = clamp(profile ability + challenge offset, 0, 1), with COMFORTABLE=-0.2, BALANCED=0, CHALLENGING=+0.2. Dimension fit = 1 - abs(book requirement - target ability). Topic fit = feature topic relevance. Total = arithmetic mean of four fits. Sort descending score then ascending book ID. Return at least two reasons grounded in component scores. Versions are `stub-profile-v1` and `stub-rank-v1`. These are demo rules, not scientifically validated measurements.
 
 ## Delivery and collaboration
 
