@@ -91,6 +91,36 @@
 3. 피드백 소유자 불일치 시 상태 코드 (403 부재)
 4. 세션 잠금 구현 방식 (`SELECT FOR UPDATE` vs 낙관적 락 + 재시도)
 
+## 다른 레포·팀 진행 상황 (백엔드 관련) — 2026-09-14 확인
+
+팀 조직(`CAU-2026-2-capstone-5-team-8`)에는 Backend 외에 Frontend, ML, Data-Pipeline 레포가 있다.
+
+- **Frontend / ML**: 아직 미착수 (각각 Initial commit만 존재)
+- **Data-Pipeline**: 활발히 진행 중 (PR 9개 중 8개 머지, 1개 진행 중). 공개 API/출판사 페이지에서 실제 도서 메타데이터·목차·본문 일부를 수집해 `books.jsonl`/`documents.jsonl`/`toc.jsonl`/`sources.jsonl`로 저장한다. README에 "concept extraction, difficulty scoring, or recommendation은 하지 않는다"고 명시 — `book_feature` 계산은 이 레포 책임이 아니다.
+
+### 백엔드가 신경 써야 할 것
+
+1. **스코프 확인 필요**: Data-Pipeline은 이미 OS 5권 + Linear Algebra(선형대수) 5권을 수집했는데, `design.md`의 MVP 범위는 "한 개 분야(운영체제)"만 명시돼 있다. 실제로 여러 분야를 지원할 계획이면 `design.md` 스코프 문구부터 갱신해야 한다.
+2. **실데이터 ingestion 경로 없음**: Data-Pipeline의 JSONL 스키마(`Book`/`Document`/`TocEntry`/`Source`, ISBN 기반 `book_id`)를 Backend의 `book`/`book_topic`/`book_sample` 테이블로 옮기는 임포트 스크립트가 아직 없다. 지금은 손으로 만든 데모 도서 5권뿐.
+3. **`book_feature`(난이도 점수) 채울 주체 미정**: ML 레포가 아직 미착수라, 6단계(추천) 구현 시점까지 이 데이터가 준비될지 불확실 — stub 데이터로 6단계를 먼저 검증하고 실제 feature는 나중에 교체하는 방향이 현실적일 수 있음.
+4. **license/provenance 개념 재사용 가능**: `sources.jsonl`의 `license`/`rights_note`가 Backend `book_sample.provenance`/`synthetic`과 개념이 겹침 — 나중에 매핑 시 참고.
+
+## 토픽(분야)이 운영체제 하나로 고정돼 있는가?
+
+**아니다 — 코드/스키마는 분야 범용(topic-agnostic)이다.** 확인 결과:
+
+- Java 소스 전체에서 `"OS"`나 `"운영체제"`를 하드코딩한 곳은 없다 (전체 grep으로 확인)
+- `topic` 테이블은 임의의 분야를 부모-자식 관계로 저장할 수 있고, `POST /api/assessments`도 `topicId`를 그냥 파라미터로 받아 그 분야의 활성 문항을 샘플링할 뿐이다
+- 지금 "운영체제 하나만" 되는 이유는 **코드 제약이 아니라 콘텐츠(데모 데이터) 제약**이다: `db/demo/catalog.sql`이 CS→OS 분야만 넣고, `db/demo/questions.sql`이 OS 문항 9개만 넣어놨을 뿐이다. `design.md`도 이걸 의도적인 "MVP 범위" 결정으로 명시해뒀다(운영체제 1개 분야, 도서 5권으로 축소).
+
+**자료구조·선형대수·알고리즘 등을 추가하려면 코드 수정이 필요 없고:**
+
+1. `topic` 테이블에 해당 분야 행 추가 (이미 범용 INSERT로 가능)
+2. 분야별로 측정 영역(어휘/배경지식/독해)당 3문항씩, 총 9문항 콘텐츠 작성 — 코드가 아니라 콘텐츠 제작 작업
+3. (추천까지 지원하려면) 그 분야에 속한 도서와 `book_feature`도 준비돼야 함 — 위 Data-Pipeline/ML 이슈와 직결
+
+즉 버그가 아니라, **팀이 여러 분야로 확장하기로 결정하면 콘텐츠(문항·도서)만 채우면 되는 구조**다. 다만 `design.md`의 스코프 문구는 여전히 "1개 분야"로 적혀있으니, 확장하기로 했다면 그 문서부터 갱신해야 한다.
+
 ## 참고 문서
 
 - 전체 계약: [design.md](design.md)
