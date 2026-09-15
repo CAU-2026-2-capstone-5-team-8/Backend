@@ -49,7 +49,9 @@ public class AssessmentService {
         List<AssessmentQuestion> issued = new ArrayList<>();
         for (int i = 0; i < sampled.size(); i++) {
             Question q = sampled.get(i);
-            issued.add(new AssessmentQuestion(session.getId(), q.getId(), i, q.getMeasurementArea(), q.getPrompt(), q.getVersion()));
+            issued.add(new AssessmentQuestion(
+                    session.getId(), q.getId(), i, q.getMeasurementArea(),
+                    q.getPrompt(), q.getVersion(), q.getDifficulty()));
         }
         assessmentQuestions.saveAll(issued);
 

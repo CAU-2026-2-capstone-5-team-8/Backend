@@ -123,7 +123,9 @@ class AssessmentCreationIntegrationTest {
     @Test void rejectsAnswerOnCompletedSession() throws Exception {
         long sessionId = json.readTree(post(user(), topic("OS")).body()).path("id").asLong();
         long questionId = json.readTree(get(sessionId).body()).path("questions").get(0).path("id").asLong();
-        jdbc.update("update backend.assessment_session set status='COMPLETED' where id=?", sessionId);
+        jdbc.update(
+                "update backend.assessment_session set status='COMPLETED', completed_at=now() where id=?",
+                sessionId);
 
         assertThat(put(sessionId, questionId, true).statusCode()).isEqualTo(409);
     }

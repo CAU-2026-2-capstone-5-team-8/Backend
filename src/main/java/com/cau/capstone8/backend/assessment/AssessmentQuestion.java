@@ -13,17 +13,19 @@ public class AssessmentQuestion {
     @Column(name = "measurement_area_snapshot", nullable = false, length = 40) private MeasurementArea measurementAreaSnapshot;
     @Column(name = "prompt_snapshot", nullable = false, columnDefinition = "text") private String promptSnapshot;
     @Column(name = "version_snapshot", nullable = false, length = 80) private String versionSnapshot;
+    @Column(name = "difficulty_snapshot", nullable = false) private int difficultySnapshot;
 
     protected AssessmentQuestion() {}
 
     public AssessmentQuestion(Long sessionId, Long questionId, int orderIndex, MeasurementArea measurementAreaSnapshot,
-                               String promptSnapshot, String versionSnapshot) {
+                               String promptSnapshot, String versionSnapshot, int difficultySnapshot) {
         this.sessionId = sessionId;
         this.questionId = questionId;
         this.orderIndex = orderIndex;
         this.measurementAreaSnapshot = measurementAreaSnapshot;
         this.promptSnapshot = promptSnapshot;
         this.versionSnapshot = versionSnapshot;
+        this.difficultySnapshot = difficultySnapshot;
     }
 
     public Long getId() { return id; }
@@ -33,4 +35,5 @@ public class AssessmentQuestion {
     public MeasurementArea getMeasurementAreaSnapshot() { return measurementAreaSnapshot; }
     public String getPromptSnapshot() { return promptSnapshot; }
     public String getVersionSnapshot() { return versionSnapshot; }
+    public int getDifficultySnapshot() { return difficultySnapshot; }
 }

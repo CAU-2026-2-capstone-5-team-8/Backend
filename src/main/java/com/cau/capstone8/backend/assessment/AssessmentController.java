@@ -10,7 +10,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/assessments")
 public class AssessmentController {
     private final AssessmentService service;
-    public AssessmentController(AssessmentService service) { this.service = service; }
+    private final AssessmentCompletionService completionService;
+    public AssessmentController(AssessmentService service, AssessmentCompletionService completionService) {
+        this.service = service;
+        this.completionService = completionService;
+    }
 
     @PostMapping
     public ResponseEntity<AssessmentResponse> create(@RequestBody @Valid AssessmentCreateRequest request) {
@@ -27,5 +31,10 @@ public class AssessmentController {
                                                       @PathVariable @Positive long assessmentQuestionId,
                                                       @RequestBody @Valid AssessmentAnswerRequest request) {
         return service.answer(sessionId, assessmentQuestionId, request.knowsConcept());
+    }
+
+    @PostMapping("/{sessionId}/complete")
+    public AssessmentCompletionResponse complete(@PathVariable @Positive long sessionId) {
+        return completionService.complete(sessionId);
     }
 }
