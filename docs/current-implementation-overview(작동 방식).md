@@ -1,4 +1,4 @@
-# 지금 구현된 것 설명 (2026-09-14 기준)
+# 지금 구현된 것 설명 (2026-09-15 기준)
 
 이 문서는 "지금 백엔드가 실제로 뭘 하는지"를 이해하기 위한 설명 문서다. 미래 계획은 [remaining-work-analysis.md](remaining-work-analysis.md), 전체 목표 계약은 [design.md](design.md) 참고.
 
@@ -9,7 +9,7 @@
 ```
 
 - **Spring Boot가 전부 담당한다.** API, 검증, DB 저장, 응답 생성까지 전부 Spring Boot 안에서 처리된다.
-- **Python ML 서비스는 아직 코드 자체가 없다.** 설계상 나중에 "진단 점수 계산"과 "책 순위 매기기"만 담당할 예정이지만(스텁조차 아직 미구현), 지금은 관련 로직이 전혀 없다.
+- **별도 ML 레포에는 계산 로직이 있지만, 이 Backend에는 ML 연동 코드가 아직 없다.** `MlGateway`, stub, HTTP 어댑터가 모두 미구현이라 현재 Spring Boot 요청 흐름에서는 ML을 호출하지 않는다.
 - **인증이 없다.** 로그인 없이 `userId`를 그냥 요청 값으로 받는다. 실제 서비스가 아니라 프로토타입이기 때문.
 - 코드는 기능별 폴더로 나뉜다: `topic`(분야), `book`(도서), `assessment`(진단), `user`(사용자), `common.error`(에러 처리 공통)
 
@@ -80,6 +80,7 @@ Body: { "userId": 1, "topicId": 2 }
       "id": 41,
       "orderIndex": 0,
       "measurementArea": "VOCABULARY",
+      "conceptId": "deadlock",
       "prompt": "\"교착 상태(deadlock)\"라는 용어의 뜻을 알고 있습니까?"
     }
   ]
@@ -92,7 +93,7 @@ Body: { "userId": 1, "topicId": 2 }
 GET /api/assessments/{sessionId}
 ```
 
-세션 상태, 9문항(측정 영역 포함), 문항별로 이미 저장된 답변(`knowsConcept`, 아직 답 안 했으면 `null`)을 반환한다. 존재하지 않는 sessionId면 404.
+세션 상태, 9문항(측정 영역과 `conceptId` 포함), 문항별로 이미 저장된 답변(`knowsConcept`, 아직 답 안 했으면 `null`)을 반환한다. 존재하지 않는 sessionId면 404.
 
 ### 2-6. 진단 답변 저장
 
