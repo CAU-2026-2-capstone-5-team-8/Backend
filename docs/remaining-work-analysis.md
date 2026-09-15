@@ -94,7 +94,8 @@
 
 팀 조직(`CAU-2026-2-capstone-5-team-8`)에는 Backend 외에 Frontend, ML, Data-Pipeline 레포가 있다.
 
-- **Frontend / ML**: 아직 미착수 (각각 Initial commit만 존재)
+- **Frontend**: 아직 미착수 (Initial commit만 존재)
+- **ML**: ~~미착수~~ **2026-09-15 정정: 상당히 진행됨.** 병합 PR 2개로 개념 추출·난이도 프로필·리더 프로필 계산·매칭/랭킹·평가 파이프라인이 이미 구현돼 있다 (`bookmatch-ml` CLI). 상세는 [data-pipeline-integration-notes](<data-pipeline-integration-notes(데이터 파이프 라인 유의점).md>) 참고 — **ML이 기대하는 입력 계약이 Backend가 실제로 만든 API와 다르다.**
 - **Data-Pipeline**: 활발히 진행 중 (PR 9개 중 8개 머지, 1개 진행 중). 공개 API/출판사 페이지에서 실제 도서 메타데이터·목차·본문 일부를 수집해 `books.jsonl`/`documents.jsonl`/`toc.jsonl`/`sources.jsonl`로 저장한다. README에 "concept extraction, difficulty scoring, or recommendation은 하지 않는다"고 명시 — `book_feature` 계산은 이 레포 책임이 아니다.
 
 ### 백엔드가 신경 써야 할 것

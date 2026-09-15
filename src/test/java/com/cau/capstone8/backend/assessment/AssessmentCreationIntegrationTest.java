@@ -38,6 +38,7 @@ class AssessmentCreationIntegrationTest {
         var areaCounts = new java.util.HashMap<String, Integer>();
         for (var q : questions) {
             assertThat(q.path("prompt").asString()).isNotBlank();
+            assertThat(q.path("conceptId").asString()).isNotBlank();
             String area = q.path("measurementArea").asString();
             assertThat(area).isIn("VOCABULARY", "BACKGROUND_KNOWLEDGE", "COMPREHENSION");
             areaCounts.merge(area, 1, Integer::sum);

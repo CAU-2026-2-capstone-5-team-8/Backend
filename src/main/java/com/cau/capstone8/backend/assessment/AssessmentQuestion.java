@@ -12,17 +12,19 @@ public class AssessmentQuestion {
     @Enumerated(EnumType.STRING)
     @Column(name = "measurement_area_snapshot", nullable = false, length = 40) private MeasurementArea measurementAreaSnapshot;
     @Column(name = "prompt_snapshot", nullable = false, columnDefinition = "text") private String promptSnapshot;
+    @Column(name = "concept_id_snapshot", length = 120) private String conceptIdSnapshot;
     @Column(name = "version_snapshot", nullable = false, length = 80) private String versionSnapshot;
 
     protected AssessmentQuestion() {}
 
     public AssessmentQuestion(Long sessionId, Long questionId, int orderIndex, MeasurementArea measurementAreaSnapshot,
-                               String promptSnapshot, String versionSnapshot) {
+                               String promptSnapshot, String conceptIdSnapshot, String versionSnapshot) {
         this.sessionId = sessionId;
         this.questionId = questionId;
         this.orderIndex = orderIndex;
         this.measurementAreaSnapshot = measurementAreaSnapshot;
         this.promptSnapshot = promptSnapshot;
+        this.conceptIdSnapshot = conceptIdSnapshot;
         this.versionSnapshot = versionSnapshot;
     }
 
@@ -32,5 +34,6 @@ public class AssessmentQuestion {
     public int getOrderIndex() { return orderIndex; }
     public MeasurementArea getMeasurementAreaSnapshot() { return measurementAreaSnapshot; }
     public String getPromptSnapshot() { return promptSnapshot; }
+    public String getConceptIdSnapshot() { return conceptIdSnapshot; }
     public String getVersionSnapshot() { return versionSnapshot; }
 }

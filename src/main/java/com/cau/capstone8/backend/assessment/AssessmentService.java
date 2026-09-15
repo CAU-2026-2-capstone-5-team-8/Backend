@@ -49,7 +49,8 @@ public class AssessmentService {
         List<AssessmentQuestion> issued = new ArrayList<>();
         for (int i = 0; i < sampled.size(); i++) {
             Question q = sampled.get(i);
-            issued.add(new AssessmentQuestion(session.getId(), q.getId(), i, q.getMeasurementArea(), q.getPrompt(), q.getVersion()));
+            issued.add(new AssessmentQuestion(session.getId(), q.getId(), i, q.getMeasurementArea(), q.getPrompt(),
+                    q.getConceptId(), q.getVersion()));
         }
         assessmentQuestions.saveAll(issued);
 
@@ -90,14 +91,16 @@ public class AssessmentService {
         }
 
         return new AssessmentResponse.IssuedQuestion(question.getId(), question.getOrderIndex(),
-                question.getMeasurementAreaSnapshot().name(), question.getPromptSnapshot(), knowsConcept);
+                question.getMeasurementAreaSnapshot().name(), question.getConceptIdSnapshot(),
+                question.getPromptSnapshot(), knowsConcept);
     }
 
     private AssessmentResponse toResponse(AssessmentSession session, List<AssessmentQuestion> issued,
                                            Map<Long, Boolean> knownByQuestionId) {
         List<AssessmentResponse.IssuedQuestion> issuedQuestions = issued.stream()
                 .map(q -> new AssessmentResponse.IssuedQuestion(q.getId(), q.getOrderIndex(),
-                        q.getMeasurementAreaSnapshot().name(), q.getPromptSnapshot(), knownByQuestionId.get(q.getId())))
+                        q.getMeasurementAreaSnapshot().name(), q.getConceptIdSnapshot(), q.getPromptSnapshot(),
+                        knownByQuestionId.get(q.getId())))
                 .toList();
         return new AssessmentResponse(session.getId(), session.getUserId(), session.getTopicId(),
                 session.getStatus().name(), issuedQuestions);
