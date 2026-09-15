@@ -1,12 +1,12 @@
-# 남은 구현 단계 분석 (4~8단계)
+# 남은 구현 단계 분석 (6~8단계)
 
-갱신일: 2026-09-15. 현재 구현과 앞으로의 계획을 구분한다. 기준 코드는 `main`의 01624ce(PR #15 병합)다.
+갱신일: 2026-09-16. 현재 구현과 앞으로의 계획을 구분한다. 5단계 변경은 `feat/assessment-completion-profile` 브랜치 기준이며, main 병합 여부와는 별개다.
 
 ## 현재 상태
 
-- 구현됨: 카탈로그 조회 3개, 진단 생성·재조회·답변 저장 3개, 총 6개 API.
-- 검증됨: PostgreSQL 통합 테스트와 전체 빌드 통과.
-- 미구현: 5~8단계의 진단 완료·프로필·추천·ML 연동·전체 E2E.
+- 구현됨: 카탈로그 조회 3개, 진단 생성·재조회·답변 저장 3개, 완료·최신 프로필 2개, 총 8개 API.
+- 검증됨: 5단계 대상 PostgreSQL 통합 테스트와 ML 계약 단위 테스트 통과. 최종 전체 빌드 결과는 `verification-stage5.md`에 기록한다.
+- 미구현: 6~8단계의 추천·피드백, 실제 HTTP ML 연동, 전체 E2E.
 
 ## 4단계 — 구현된 답변 저장·재조회와 남은 검증
 
@@ -18,19 +18,19 @@
 - 요청은 `{"knowsConcept": true}` 또는 `{"knowsConcept": false}`다. 누락/null은 400이다.
 - 다른 세션 소속 문항은 404, 처리 중·완료된 세션은 409다.
 - 첫 답변 저장 시 CREATED → IN_PROGRESS로 전환하고, 재제출은 기존 답변을 교체한다.
-- 세션 행에 비관적 쓰기 잠금을 사용한다. 완료 API도 구현 시 같은 잠금을 사용해야 한다.
+- 세션 행에 비관적 쓰기 잠금을 사용한다. 완료 API도 같은 잠금을 사용한다.
 
 ### 아직 보강할 검증
 - 서로 다른 연결에서 같은 문항을 동시에 제출해 중복 없이 저장되는지 확인.
 - 문항 원본 변경 후 기존 세션의 문항·영역·버전 스냅샷이 유지되는지 확인.
-- 실제 완료 API가 추가되면 답변 저장과 완료 요청 경쟁 검증.
+- 답변 저장과 완료 요청의 실제 동시 경쟁 검증.
 
-## 5단계 — 진단 완료·프로필 계산
+## 5단계 — 구현된 진단 완료·프로필 계산
 
-가장 복잡한 상태 머신이 여기 있다 (설계 문서 "진단 상태 전이" 전체를 다시 읽을 것).
+아래 상태 머신과 API는 `feat/assessment-completion-profile` 브랜치에 구현했다.
 
 ### POST /api/assessments/{sessionId}/complete
-- 9개 답변이 모두 존재하는지 확인 (부족하면 409 또는 400 — 설계 문서에 명시된 코드 없음, 결정 필요)
+- 9개 답변이 모두 존재하는지 확인하고 부족하면 상태 충돌 409 반환
 - 입력을 얼려(freeze) UUID `attemptId` 발급 + 30초 lease 설정, 커밋 후 ML 호출 (`MlGateway.profile`)
 - 두 번째 짧은 트랜잭션에서 현재 attempt가 아직 세션의 소유인지 재확인한 뒤 `reader_profile` 원자적 저장 + `COMPLETED` 전이
 - **재시도 시맨틱**: 이미 완료된 세션에 다시 호출하면 기존 프로필을 그대로 반환 (200)
@@ -41,7 +41,7 @@
 
 ### GET /api/users/{userId}/profiles/{topicId}
 - 완료 시각 내림차순, 동률이면 ID로 최신 프로필 1건 조회
-- 프로필 없음 → 404 (설계 문서: 추천 쪽에서는 "no profile → 409"이지만 이 조회 자체는 단순 조회이므로 404가 일관적 — 결정 필요)
+- 프로필 없음 → 404 (추천 생성의 프로필 없음은 별도 상태 충돌이므로 409)
 
 ### 필요한 새 구성 요소
 - `reader_profile` 테이블 마이그레이션 (세션 UNIQUE, 능력 3종, 계산 버전, evidence JSONB)
@@ -83,26 +83,26 @@
 - README/설계 문서/`docs/verification-stage*.md` 최종 정리
 - 팀 인수인계용 요약 (Google Drive 진행 기록 문서와 동기화)
 
-## 결정이 필요한 모호한 지점 (구현 전에 팀 논의 권장)
+## 남은 결정 사항
 
-1. 완료 시 9개 답변 미충족 상태 코드 (400 vs 409)
-2. 프로필 없음 조회의 상태 코드 (404 vs 추천 쪽 409와의 일관성)
-3. 피드백 소유자 불일치 시 상태 코드 (403 부재)
-4. 현재 세션 비관적 잠금과 완료 처리의 트랜잭션 경계·경쟁 테스트
+1. 피드백 소유자 불일치 시 상태 코드 (403 부재)
+2. 현재 세션 비관적 잠금과 완료 처리의 실제 동시 경쟁 테스트
 
-## 다른 레포·팀 진행 상황 (백엔드 관련) — 2026-09-15 확인
+5단계에서는 9개 답변 미충족을 상태 충돌 409, 최신 프로필 조회 결과 없음을 404로 결정했다.
+
+## 다른 레포·팀 진행 상황 (백엔드 관련) — 2026-09-16 확인
 
 팀 조직(`CAU-2026-2-capstone-5-team-8`)에는 Backend 외에 Frontend, ML, Data-Pipeline 레포가 있다.
 
-- **Frontend**: 아직 미착수 (Initial commit만 존재)
-- **ML**: 별도 ML 레포에는 개념 추출·난이도 프로필·리더 프로필 계산·매칭/랭킹·평가 파이프라인이 구현돼 있다(`bookmatch-ml` CLI). 다만 **Backend 레포에는 아직 `MlGateway`, stub, HTTP 어댑터가 없고**, ML 입출력 계약도 현재 Backend API·DB 모델과 연결되지 않았다.
+- **ML**: canonical handoff, 도서/독자 프로필, 랭킹, 평가, Spring용 `/ml/reader-profile`·`/ml/rank` 계약까지 main에 구현됨. 실제 HTTP 연결은 Backend 7단계에서 계약을 다시 대조해야 한다.
+- **Frontend**: 이 문서 갱신에서는 별도 재확인하지 않음.
 - **Data-Pipeline**: 활발히 진행 중 (PR 9개 중 8개 머지, 1개 진행 중). 공개 API/출판사 페이지에서 실제 도서 메타데이터·목차·본문 일부를 수집해 `books.jsonl`/`documents.jsonl`/`toc.jsonl`/`sources.jsonl`로 저장한다. README에 "concept extraction, difficulty scoring, or recommendation은 하지 않는다"고 명시 — `book_feature` 계산은 이 레포 책임이 아니다.
 
 ### 백엔드가 신경 써야 할 것
 
 1. **스코프 확인 필요**: Data-Pipeline은 이미 OS 5권 + Linear Algebra(선형대수) 5권을 수집했는데, `design.md`의 MVP 범위는 "한 개 분야(운영체제)"만 명시돼 있다. 실제로 여러 분야를 지원할 계획이면 `design.md` 스코프 문구부터 갱신해야 한다.
 2. **실데이터 ingestion 경로 없음**: Data-Pipeline의 JSONL 스키마(`Book`/`Document`/`TocEntry`/`Source`, ISBN 기반 `book_id`)를 Backend의 `book`/`book_topic`/`book_sample` 테이블로 옮기는 임포트 스크립트가 아직 없다. 지금은 손으로 만든 데모 도서 5권뿐.
-3. **`book_feature`(난이도 점수) 적재 계약 미정**: ML 계산 코드는 있지만 결과를 누가 어떤 형식으로 Backend의 `book_feature`에 적재할지 정해지지 않았다. 6단계는 stub 데이터로 먼저 검증하고, ML 팀과 입력·출력 스키마 및 적재 책임을 합의한 뒤 실제 feature로 교체하는 편이 안전하다.
+3. **ML↔Backend 영속 모델 매핑 필요**: ML은 풍부한 책 프로필과 버전·해시를 출력하지만 Backend의 현재 `book_feature`는 데모용 세 값과 topic relevance만 저장한다. 6단계는 현재 stub feature로 추천 영속화·멱등성을 먼저 검증하고, 7단계에서 실제 ML 후보 DTO와 저장 전략을 확정한다.
 4. **license/provenance 개념 재사용 가능**: `sources.jsonl`의 `license`/`rights_note`가 Backend `book_sample.provenance`/`synthetic`과 개념이 겹침 — 나중에 매핑 시 참고.
 
 ## 토픽(분야)이 운영체제 하나로 고정돼 있는가?
