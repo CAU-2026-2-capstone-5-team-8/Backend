@@ -74,6 +74,7 @@ class AssessmentCreationIntegrationTest {
         assertThat(questions.size()).isEqualTo(9);
         for (var q : questions) {
             assertThat(q.path("knowsConcept").isNull()).isTrue();
+            assertThat(q.path("conceptId").asString()).isNotBlank();
         }
     }
 
@@ -94,10 +95,30 @@ class AssessmentCreationIntegrationTest {
         var body = json.readTree(response.body());
         assertThat(body.path("id").asLong()).isEqualTo(questionId);
         assertThat(body.path("knowsConcept").asBoolean()).isTrue();
+        assertThat(body.path("conceptId").asString()).isNotBlank();
 
         var reloaded = json.readTree(get(sessionId).body());
         assertThat(reloaded.path("status").asString()).isEqualTo("IN_PROGRESS");
         assertThat(reloaded.path("questions").get(0).path("knowsConcept").asBoolean()).isTrue();
+    }
+
+    @Test void preservesNullableConceptIdAcrossAssessmentResponses() throws Exception {
+        jdbc.update("update backend.question set concept_id=null where demo_key='os-vocab-1'");
+        try {
+            var created = json.readTree(post(user(), topic("OS")).body());
+            long sessionId = created.path("id").asLong();
+            JsonNode createdQuestion = findQuestionWithNullConceptId(created);
+            long questionId = createdQuestion.path("id").asLong();
+            jdbc.update("update backend.question set concept_id='changed-after-creation' where demo_key='os-vocab-1'");
+
+            assertThat(findQuestion(get(sessionId), questionId).path("conceptId").isNull()).isTrue();
+
+            var answered = json.readTree(put(sessionId, questionId, true).body());
+            assertThat(answered.path("conceptId").isNull()).isTrue();
+            assertThat(answered.path("knowsConcept").asBoolean()).isTrue();
+        } finally {
+            jdbc.update("update backend.question set concept_id='deadlock' where demo_key='os-vocab-1'");
+        }
     }
 
     @Test void resubmittingSameQuestionReplacesTheAnswer() throws Exception {
@@ -144,6 +165,23 @@ class AssessmentCreationIntegrationTest {
 
     long user() { return jdbc.queryForObject("select id from backend.app_user limit 1", Long.class); }
     long topic(String code) { return jdbc.queryForObject("select id from backend.topic where code=?", Long.class, code); }
+
+    JsonNode findQuestionWithNullConceptId(JsonNode assessment) {
+        for (var question : assessment.path("questions")) {
+            if (question.path("conceptId").isNull()) return question;
+        }
+        fail("conceptId가 null인 문항이 응답에 없습니다.");
+        throw new AssertionError("unreachable");
+    }
+
+    JsonNode findQuestion(HttpResponse<String> response, long questionId) throws Exception {
+        assertThat(response.statusCode()).isEqualTo(200);
+        for (var question : json.readTree(response.body()).path("questions")) {
+            if (question.path("id").asLong() == questionId) return question;
+        }
+        fail("진단 응답에서 문항을 찾을 수 없습니다: %s", questionId);
+        throw new AssertionError("unreachable");
+    }
 
     HttpResponse<String> post(long userId, long topicId) throws Exception {
         try (var client = HttpClient.newHttpClient()) {

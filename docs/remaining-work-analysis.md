@@ -1,11 +1,11 @@
 # 남은 구현 단계 분석 (4~8단계)
 
-갱신일: 2026-09-14. 현재 구현과 앞으로의 계획을 구분한다. 기준 코드는 PR #2의 b06da70이며, main 병합 여부와는 별개다.
+갱신일: 2026-09-15. 현재 구현과 앞으로의 계획을 구분한다. 기준 코드는 `main`의 01624ce(PR #15 병합)다.
 
 ## 현재 상태
 
 - 구현됨: 카탈로그 조회 3개, 진단 생성·재조회·답변 저장 3개, 총 6개 API.
-- 검증됨: PostgreSQL 통합 테스트 36개와 전체 빌드 통과.
+- 검증됨: PostgreSQL 통합 테스트와 전체 빌드 통과.
 - 미구현: 5~8단계의 진단 완료·프로필·추천·ML 연동·전체 E2E.
 
 ## 4단계 — 구현된 답변 저장·재조회와 남은 검증
@@ -90,19 +90,19 @@
 3. 피드백 소유자 불일치 시 상태 코드 (403 부재)
 4. 현재 세션 비관적 잠금과 완료 처리의 트랜잭션 경계·경쟁 테스트
 
-## 다른 레포·팀 진행 상황 (백엔드 관련) — 2026-09-14 확인
+## 다른 레포·팀 진행 상황 (백엔드 관련) — 2026-09-15 확인
 
 팀 조직(`CAU-2026-2-capstone-5-team-8`)에는 Backend 외에 Frontend, ML, Data-Pipeline 레포가 있다.
 
 - **Frontend**: 아직 미착수 (Initial commit만 존재)
-- **ML**: ~~미착수~~ **2026-09-15 정정: 상당히 진행됨.** 병합 PR 2개로 개념 추출·난이도 프로필·리더 프로필 계산·매칭/랭킹·평가 파이프라인이 이미 구현돼 있다 (`bookmatch-ml` CLI). 상세는 [data-pipeline-integration-notes](<data-pipeline-integration-notes(데이터 파이프 라인 유의점).md>) 참고 — **ML이 기대하는 입력 계약이 Backend가 실제로 만든 API와 다르다.**
+- **ML**: 별도 ML 레포에는 개념 추출·난이도 프로필·리더 프로필 계산·매칭/랭킹·평가 파이프라인이 구현돼 있다(`bookmatch-ml` CLI). 다만 **Backend 레포에는 아직 `MlGateway`, stub, HTTP 어댑터가 없고**, ML 입출력 계약도 현재 Backend API·DB 모델과 연결되지 않았다.
 - **Data-Pipeline**: 활발히 진행 중 (PR 9개 중 8개 머지, 1개 진행 중). 공개 API/출판사 페이지에서 실제 도서 메타데이터·목차·본문 일부를 수집해 `books.jsonl`/`documents.jsonl`/`toc.jsonl`/`sources.jsonl`로 저장한다. README에 "concept extraction, difficulty scoring, or recommendation은 하지 않는다"고 명시 — `book_feature` 계산은 이 레포 책임이 아니다.
 
 ### 백엔드가 신경 써야 할 것
 
 1. **스코프 확인 필요**: Data-Pipeline은 이미 OS 5권 + Linear Algebra(선형대수) 5권을 수집했는데, `design.md`의 MVP 범위는 "한 개 분야(운영체제)"만 명시돼 있다. 실제로 여러 분야를 지원할 계획이면 `design.md` 스코프 문구부터 갱신해야 한다.
 2. **실데이터 ingestion 경로 없음**: Data-Pipeline의 JSONL 스키마(`Book`/`Document`/`TocEntry`/`Source`, ISBN 기반 `book_id`)를 Backend의 `book`/`book_topic`/`book_sample` 테이블로 옮기는 임포트 스크립트가 아직 없다. 지금은 손으로 만든 데모 도서 5권뿐.
-3. **`book_feature`(난이도 점수) 채울 주체 미정**: ML 레포가 아직 미착수라, 6단계(추천) 구현 시점까지 이 데이터가 준비될지 불확실 — stub 데이터로 6단계를 먼저 검증하고 실제 feature는 나중에 교체하는 방향이 현실적일 수 있음.
+3. **`book_feature`(난이도 점수) 적재 계약 미정**: ML 계산 코드는 있지만 결과를 누가 어떤 형식으로 Backend의 `book_feature`에 적재할지 정해지지 않았다. 6단계는 stub 데이터로 먼저 검증하고, ML 팀과 입력·출력 스키마 및 적재 책임을 합의한 뒤 실제 feature로 교체하는 편이 안전하다.
 4. **license/provenance 개념 재사용 가능**: `sources.jsonl`의 `license`/`rights_note`가 Backend `book_sample.provenance`/`synthetic`과 개념이 겹침 — 나중에 매핑 시 참고.
 
 ## 토픽(분야)이 운영체제 하나로 고정돼 있는가?
