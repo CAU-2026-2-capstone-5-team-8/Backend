@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,8 @@ class ReaderProfileMigrationUpgradeTest {
         flyway(MigrationVersion.fromVersion(PREVIOUS_VERSION)).migrate();
         OffsetDateTime previousUpdate = OffsetDateTime.parse("2026-09-15T00:00:00Z");
         long assessmentQuestionId;
+        long incompleteProcessingSessionId;
+        long validProcessingSessionId;
         try (Connection connection = connection()) {
             long userId = returningId(connection, """
                     insert into backend.app_user(display_name) values ('upgrade user') returning id
@@ -38,9 +41,19 @@ class ReaderProfileMigrationUpgradeTest {
                     returning id
                     """.formatted(topicId));
             long sessionId = returningId(connection, """
-                    insert into backend.assessment_session(user_id,topic_id,status,updated_at)
-                    values (%d,%d,'COMPLETED','%s') returning id
-                    """.formatted(userId, topicId, previousUpdate));
+                    insert into backend.assessment_session(
+                        user_id,topic_id,status,attempt_id,processing_expires_at,updated_at)
+                    values (%d,%d,'COMPLETED','%s','2026-09-15T01:00:00Z','%s') returning id
+                    """.formatted(userId, topicId, UUID.randomUUID(), previousUpdate));
+            incompleteProcessingSessionId = returningId(connection, """
+                    insert into backend.assessment_session(user_id,topic_id,status,attempt_id)
+                    values (%d,%d,'PROCESSING','%s') returning id
+                    """.formatted(userId, topicId, UUID.randomUUID()));
+            validProcessingSessionId = returningId(connection, """
+                    insert into backend.assessment_session(
+                        user_id,topic_id,status,attempt_id,processing_expires_at)
+                    values (%d,%d,'PROCESSING','%s','2026-09-15T01:00:00Z') returning id
+                    """.formatted(userId, topicId, UUID.randomUUID()));
             assessmentQuestionId = returningId(connection, """
                     insert into backend.assessment_question(
                         session_id,question_id,order_index,measurement_area_snapshot,
@@ -63,6 +76,10 @@ class ReaderProfileMigrationUpgradeTest {
                 assertThat(result.getObject("completed_at", OffsetDateTime.class))
                         .isEqualTo(previousUpdate);
             }
+            assertOwnershipState(
+                    connection, incompleteProcessingSessionId, "IN_PROGRESS", true, true);
+            assertOwnershipState(
+                    connection, validProcessingSessionId, "PROCESSING", false, false);
             try (var statement = connection.createStatement();
                     var result = statement.executeQuery(
                             "select difficulty_snapshot from backend.assessment_question where id="
@@ -88,6 +105,26 @@ class ReaderProfileMigrationUpgradeTest {
     private Connection connection() throws Exception {
         return DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    }
+
+    private void assertOwnershipState(
+            Connection connection,
+            long sessionId,
+            String expectedStatus,
+            boolean attemptCleared,
+            boolean leaseCleared) throws Exception {
+        try (var statement = connection.createStatement();
+                var result = statement.executeQuery("""
+                        select status, attempt_id is null as attempt_cleared,
+                               processing_expires_at is null as lease_cleared
+                        from backend.assessment_session
+                        where id=%d
+                        """.formatted(sessionId))) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getString("status")).isEqualTo(expectedStatus);
+            assertThat(result.getBoolean("attempt_cleared")).isEqualTo(attemptCleared);
+            assertThat(result.getBoolean("lease_cleared")).isEqualTo(leaseCleared);
+        }
     }
 
     private long returningId(Connection connection, String sql) throws Exception {

@@ -20,6 +20,21 @@ UPDATE assessment_session
 SET completed_at = updated_at
 WHERE status = 'COMPLETED';
 
+-- Normalize legacy/manual states before validating the new ownership invariant.
+-- Incomplete PROCESSING ownership cannot be resumed safely, so make it retryable.
+UPDATE assessment_session
+SET status = 'IN_PROGRESS',
+    attempt_id = NULL,
+    processing_expires_at = NULL
+WHERE status = 'PROCESSING'
+  AND (attempt_id IS NULL OR processing_expires_at IS NULL);
+
+UPDATE assessment_session
+SET attempt_id = NULL,
+    processing_expires_at = NULL
+WHERE status <> 'PROCESSING'
+  AND (attempt_id IS NOT NULL OR processing_expires_at IS NOT NULL);
+
 ALTER TABLE assessment_session
     ADD CONSTRAINT assessment_session_processing_ownership_check CHECK (
         (status = 'PROCESSING' AND attempt_id IS NOT NULL AND processing_expires_at IS NOT NULL)
