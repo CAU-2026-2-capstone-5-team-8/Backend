@@ -8,11 +8,11 @@ macOS에서 OpenJDK 21과 실제 PostgreSQL 17.11 Testcontainers를 사용했다
 
 ```text
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew clean build --no-daemon --console=plain
-BUILD SUCCESSFUL in 30s
+BUILD SUCCESSFUL in 32s
 7 actionable tasks: 7 executed
 ```
 
-JUnit XML 합계는 **52개, failures=0, errors=0, skipped=0**이다. H2와 외부 ML 서버는 사용하지 않았다. 실행 JAR `build/libs/backend-0.0.1-SNAPSHOT.jar`도 생성됐다.
+JUnit XML 합계는 **54개, failures=0, errors=0, skipped=0**이다. H2와 외부 ML 서버는 사용하지 않았다. 실행 JAR `build/libs/backend-0.0.1-SNAPSHOT.jar`도 생성됐다.
 
 ## 확인한 동작
 
@@ -25,6 +25,7 @@ JUnit XML 합계는 **52개, failures=0, errors=0, skipped=0**이다. H2와 외�
 - 완료 이후 답변 변경을 거부한다.
 - 최신 프로필은 완료 시각 내림차순, 동률이면 프로필 ID 내림차순으로 선택하며 결과 없음은 404다.
 - ML 요청은 중복 문항 ID와 누락된 측정 영역을 거부하고, 응답의 상관 ID·계약 버전·영역별 응답 수·유한한 `[0,1]` 점수를 검증한다.
+- 최신 main의 `concept_id` 변경을 통합해 발급 시점 concept ID와 난이도를 함께 스냅샷하고, 프로필 계산 요청에도 concept ID를 전달한다.
 - DB는 처리 상태와 attempt/lease의 동시 존재, 완료 상태와 완료 시각의 동시 존재, 난이도 스냅샷 1~5, 프로필 세션 유일성, 점수 범위와 JSON 객체 evidence를 제약으로 검증한다.
 - 이전 Flyway 버전까지만 적용한 DB에 기존 `COMPLETED` 세션과 발급 문항을 넣은 뒤 최신 migration으로 올려, 완료 시각과 난이도 스냅샷이 보존되는 업그레이드 경로를 검증한다.
 

@@ -11,6 +11,7 @@ public class Question {
     @Column(name = "measurement_area", nullable = false, length = 40) private MeasurementArea measurementArea;
     @Column(nullable = false) private int difficulty;
     @Column(nullable = false, columnDefinition = "text") private String prompt;
+    @Column(name = "concept_id", length = 120) private String conceptId;
     @Column(nullable = false, length = 80) private String version;
     @Column(nullable = false) private boolean active;
 
@@ -21,6 +22,7 @@ public class Question {
     public MeasurementArea getMeasurementArea() { return measurementArea; }
     public int getDifficulty() { return difficulty; }
     public String getPrompt() { return prompt; }
+    public String getConceptId() { return conceptId; }
     public String getVersion() { return version; }
     public boolean isActive() { return active; }
 }

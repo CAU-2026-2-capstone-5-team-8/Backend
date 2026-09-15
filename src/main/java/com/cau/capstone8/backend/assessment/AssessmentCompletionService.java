@@ -123,6 +123,7 @@ public class AssessmentCompletionService {
                 .map(question -> new MlProfileRequest.Answer(
                         question.getId().toString(),
                         question.getMeasurementAreaSnapshot(),
+                        question.getConceptIdSnapshot(),
                         question.getDifficultySnapshot(),
                         answerByQuestion.get(question.getId()).isKnowsConcept(),
                         1.0))

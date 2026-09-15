@@ -1,4 +1,4 @@
-# 지금 구현된 것 설명 (2026-09-15 기준)
+# 지금 구현된 것 설명 (2026-09-16 기준)
 
 이 문서는 "지금 백엔드가 실제로 뭘 하는지"를 이해하기 위한 설명 문서다. 미래 계획은 [remaining-work-analysis.md](remaining-work-analysis.md), 전체 목표 계약은 [design.md](design.md) 참고.
 
@@ -80,6 +80,7 @@ Body: { "userId": 1, "topicId": 2 }
       "id": 41,
       "orderIndex": 0,
       "measurementArea": "VOCABULARY",
+      "conceptId": "deadlock",
       "prompt": "\"교착 상태(deadlock)\"라는 용어의 뜻을 알고 있습니까?"
     }
   ]
@@ -92,7 +93,7 @@ Body: { "userId": 1, "topicId": 2 }
 GET /api/assessments/{sessionId}
 ```
 
-세션 상태, 9문항(측정 영역 포함), 문항별로 이미 저장된 답변(`knowsConcept`, 아직 답 안 했으면 `null`)을 반환한다. 존재하지 않는 sessionId면 404.
+세션 상태, 9문항(측정 영역과 `conceptId` 포함), 문항별로 이미 저장된 답변(`knowsConcept`, 아직 답 안 했으면 `null`)을 반환한다. 존재하지 않는 sessionId면 404.
 
 ### 2-6. 진단 답변 저장
 

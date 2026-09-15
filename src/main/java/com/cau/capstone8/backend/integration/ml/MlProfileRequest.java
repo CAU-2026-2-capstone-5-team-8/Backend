@@ -42,12 +42,14 @@ public record MlProfileRequest(
     public record Answer(
             String questionId,
             MeasurementArea measurementArea,
+            String conceptId,
             int difficulty,
             boolean knowsConcept,
             double points) {
 
         public Answer {
             if (questionId == null || questionId.isBlank() || measurementArea == null
+                    || (conceptId != null && conceptId.isBlank())
                     || difficulty < 1 || difficulty > 5 || !Double.isFinite(points) || points <= 0) {
                 throw new IllegalArgumentException("invalid ML profile answer");
             }

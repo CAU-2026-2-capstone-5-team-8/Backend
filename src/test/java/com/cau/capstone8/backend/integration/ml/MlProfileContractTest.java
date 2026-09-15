@@ -94,6 +94,7 @@ class MlProfileContractTest {
             String questionId,
             MeasurementArea area,
             boolean knowsConcept) {
-        return new MlProfileRequest.Answer(questionId, area, 3, knowsConcept, 1.0);
+        return new MlProfileRequest.Answer(
+                questionId, area, "concept-" + questionId, 3, knowsConcept, 1.0);
     }
 }
