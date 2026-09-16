@@ -218,7 +218,11 @@ public class RecommendationService {
         snapshot.put("mlMode", mlMode);
         snapshot.put("challengeLevel", request.challengeLevel().name());
         snapshot.put("topK", request.topK());
-        snapshot.put("targetBookId", request.targetBookId());
+        // Map.copyOf (used when this snapshot is frozen into the entity) rejects null values,
+        // so an absent target book must be an absent key rather than a null one.
+        if (request.targetBookId() != null) {
+            snapshot.put("targetBookId", request.targetBookId());
+        }
         snapshot.put("profile", Map.of(
                 "id", profile.getId(),
                 "version", profile.getCalculationVersion(),
