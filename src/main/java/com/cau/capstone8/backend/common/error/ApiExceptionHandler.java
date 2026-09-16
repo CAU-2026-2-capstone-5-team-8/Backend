@@ -2,6 +2,7 @@ package com.cau.capstone8.backend.common.error;
 
 import com.cau.capstone8.backend.assessment.AssessmentStateConflictException;
 import com.cau.capstone8.backend.assessment.QuestionBankUnavailableException;
+import com.cau.capstone8.backend.integration.ml.MlGatewayException;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,10 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AssessmentStateConflictException.class)
     ResponseEntity<ApiError> assessmentStateConflict(AssessmentStateConflictException ex) {
         return error(409, "ASSESSMENT_STATE_CONFLICT", ex.getMessage());
+    }
+    @ExceptionHandler(MlGatewayException.class)
+    ResponseEntity<ApiError> mlGateway(MlGatewayException ex) {
+        return error(502, ex.getFailureCode(), "ML 서비스 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     }
     @ExceptionHandler({HandlerMethodValidationException.class, MethodArgumentTypeMismatchException.class,
             MissingServletRequestParameterException.class})

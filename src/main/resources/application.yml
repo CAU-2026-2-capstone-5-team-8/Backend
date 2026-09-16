@@ -41,3 +41,6 @@ management:
 
 ml:
   mode: ${ML_MODE:stub}
+
+assessment:
+  processing-lease: ${ASSESSMENT_PROCESSING_LEASE:PT30S}

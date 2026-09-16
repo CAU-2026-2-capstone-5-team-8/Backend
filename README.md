@@ -2,9 +2,9 @@
 
 Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당하는 독서 진단·추천 프로토타입입니다.
 
-현재 이 브랜치에는 **3단계 분야·도서 조회와 4단계 진단 생성·재조회·답변 저장**이 구현되어 있습니다. 총 6개 업무 API를 제공하며 진단은 `knowsConcept`(안다/모른다) 자기평가 방식입니다. 진단 완료·프로필·추천·ML 계산은 아직 구현 전입니다. 팀 저장소의 main 반영 여부는 PR 병합 상태를 별도로 확인해야 합니다.
+현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단 생성·재조회·답변 저장, 5단계 진단 완료·독자 프로필**이 구현되어 있습니다. 총 8개 업무 API를 제공하며 진단은 `knowsConcept`(안다/모른다) 자기평가 방식입니다. 프로필은 기본 `stub` 모드에서 영역별 안다고 답한 문항 수를 발급 문항 수로 나눈 결정론적 값입니다. 추천·피드백과 실제 HTTP ML 연동은 아직 구현 전입니다. 팀 저장소의 main 반영 여부는 PR 병합 상태를 별도로 확인해야 합니다.
 
-진단 API: `POST /api/assessments`, `GET /api/assessments/{sessionId}`, `PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}`. 답변 요청은 `{"knowsConcept": true}` 또는 `{"knowsConcept": false}`이며, 미응답은 조회 결과에서 `null`입니다. [현재 작동 방식](<docs/current-implementation-overview(작동 방식).md>)을 참고하세요.
+진단·프로필 API: `POST /api/assessments`, `GET /api/assessments/{sessionId}`, `PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}`, `POST /api/assessments/{sessionId}/complete`, `GET /api/users/{userId}/profiles/{topicId}`. 답변 요청은 `{"knowsConcept": true}` 또는 `{"knowsConcept": false}`이며, 미응답은 조회 결과에서 `null`입니다. [현재 작동 방식](<docs/current-implementation-overview(작동 방식).md>)을 참고하세요.
 
 ## 요구 환경
 
@@ -38,7 +38,7 @@ docker compose up -d --wait
 | http://localhost:8080/swagger-ui.html | Swagger UI |
 | http://localhost:8080/v3/api-docs | OpenAPI JSON |
 
-업무 API는 아래의 조회 API 3개입니다. 실행 중인 개발 서버는 `Ctrl+C`로 종료합니다.
+실행 중인 개발 서버는 `Ctrl+C`로 종료합니다.
 
 ## 분야와 도서 조회
 
@@ -109,7 +109,8 @@ WSL 주소는 재시작 후 바뀔 수 있으므로 매번 조회합니다. 이 
 | POSTGRES_HOST | localhost |
 | POSTGRES_PORT | 5432 |
 | SERVER_PORT | 8080 |
-| ML_MODE | stub; ML 구현 단계에서 사용 |
+| ML_MODE | `stub`(기본값). 현재 지원하는 결정론적 프로필 계산 모드 |
+| ASSESSMENT_PROCESSING_LEASE | 완료 처리 소유권 임대 시간. 기본값 `PT30S` |
 
 `local` 이외의 환경은 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`로 접속 정보를 전달합니다. DB 포트는 Compose에서 `127.0.0.1`에만 바인딩합니다. MVP는 인증을 제공하지 않으며 외부 공개 배포는 범위에 포함되지 않습니다.
 
@@ -146,15 +147,17 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 - 도서·분야별 활성 특성 최대 하나, 도서별 주 분야 최대 하나, FK·버전 고유성과 유한한 [0,1] 점수를 DB에서 검증합니다. 분야 변경은 DB에서 직렬화하며 수정 시각은 트리거로 갱신합니다.
 - 데모 SQL은 스키마 migration과 분리되어 `demo` 프로필에서만 실행됩니다.
 
-## ML 연동 계획
+## 진단 완료와 ML 경계
 
-`ml.mode=stub`은 결정론적 로컬 계산, `ml.mode=http`는 RestClient 기반 Python 호출을 선택하도록 구현할 예정입니다. 현재는 설정값만 준비되어 있으며 ML gateway와 두 내부 API 계약의 실행 구현은 아직 없습니다. HTTP 장애를 stub 성공으로 바꾸지 않습니다.
+`POST /api/assessments/{sessionId}/complete`는 9개 답변을 확인한 뒤 짧은 트랜잭션에서 UUID 처리 소유권과 기본 30초 임대를 확보합니다. 계산은 트랜잭션 밖에서 실행하고, 다시 소유권을 확인한 뒤 프로필 저장과 `COMPLETED` 전이를 함께 커밋합니다. 완료 요청을 재시도하면 기존 프로필을 반환하며, 진행 중인 중복 요청은 409입니다. ML 실패 시 내부 상세를 노출하지 않고 세션을 `IN_PROGRESS`로 되돌립니다.
+
+`ml.mode=stub`용 `MlGateway`와 프로필 요청·응답 검증은 구현되어 있습니다. `ml.mode=http`의 RestClient 기반 Python 호출과 추천 계산은 후속 단계입니다. 향후 HTTP 장애를 stub 성공으로 자동 전환하지 않습니다.
 
 인증 추가 시 클라이언트가 보내는 userId를 신뢰하는 데모 방식을 인증된 `/api/me`로 바꿉니다.
 
 ## 협업과 다음 단계
 
-작업 브랜치: `feat/backend-prototype`. main 직접 커밋 금지, 승인 없는 push/PR/merge/force push 금지. 작은 기능 단위로 커밋하고 동시에 작업하는 팀원은 별도 기능 브랜치를 사용합니다.
+현재 5단계 작업 브랜치: `feat/assessment-completion-profile`. main 직접 커밋 금지, 승인 없는 push/PR/merge/force push 금지. 작은 기능 단위로 커밋하고 동시에 작업하는 팀원은 별도 기능 브랜치를 사용합니다.
 
 - [승인 설계](docs/design.md)
 - [2단계 작업 계획](docs/implementation-plan.md)
@@ -162,4 +165,4 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 - [3단계 구현 계획](docs/superpowers/plans/2026-09-12-catalog.md)
 - [3단계 검증 결과](docs/verification-stage3.md)
 
-다음은 4단계의 동시 요청·원본 문항 변경 후 스냅샷 보존 검증 보강과 5단계 진단 완료·프로필 구현입니다. 이후 추천·피드백, HTTP ML 순서로 구현합니다. 2026-09-14에 현재 코드의 PostgreSQL 통합 테스트 36개와 전체 빌드를 검증했습니다.
+다음은 별도 브랜치의 6단계 추천·피드백이며, 이후 7단계 HTTP ML 연동 순서로 구현합니다. 5단계의 최종 검증 결과는 [5단계 검증 문서](docs/verification-stage5.md)에 기록합니다.
