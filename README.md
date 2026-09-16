@@ -2,7 +2,7 @@
 
 Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당하는 독서 진단·추천 프로토타입입니다.
 
-현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단 생성·재조회·답변 저장, 5단계 진단 완료·독자 프로필**이 구현되어 있습니다. 총 8개 업무 API를 제공하며 진단은 `knowsConcept`(안다/모른다) 자기평가 방식입니다. 프로필은 기본 `stub` 모드에서 영역별 안다고 답한 문항 수를 발급 문항 수로 나눈 결정론적 값입니다. 추천·피드백과 실제 HTTP ML 연동은 아직 구현 전입니다. 팀 저장소의 main 반영 여부는 PR 병합 상태를 별도로 확인해야 합니다.
+현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단 생성·재조회·답변 저장, 5단계 진단 완료·독자 프로필**이 구현되어 있습니다. 총 8개 업무 API를 제공하며 진단은 `knowsConcept`(안다/모른다) 자기평가 방식입니다. 프로필은 기본 `stub` 모드에서 영역별 안다고 답한 문항 수를 발급 문항 수로 나눈 결정론적 값입니다. **7단계 일부인 프로필 HTTP 어댑터**도 추가했으며 [설정·계약·한계](docs/ml-profile-http.md)를 참고하세요. 실제 Python 서버와 E2E 연결, 추천·피드백·rank HTTP 연결은 이 브랜치의 완료 범위가 아닙니다. main 반영 여부는 PR 병합 상태를 별도로 확인해야 합니다.
 
 진단·프로필 API: `POST /api/assessments`, `GET /api/assessments/{sessionId}`, `PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}`, `POST /api/assessments/{sessionId}/complete`, `GET /api/users/{userId}/profiles/{topicId}`. 답변 요청은 `{"knowsConcept": true}` 또는 `{"knowsConcept": false}`이며, 미응답은 조회 결과에서 `null`입니다. [현재 작동 방식](<docs/current-implementation-overview(작동 방식).md>)을 참고하세요.
 
