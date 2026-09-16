@@ -44,3 +44,6 @@ ml:
 
 assessment:
   processing-lease: ${ASSESSMENT_PROCESSING_LEASE:PT30S}
+
+recommendation:
+  processing-lease: ${RECOMMENDATION_PROCESSING_LEASE:PT30S}

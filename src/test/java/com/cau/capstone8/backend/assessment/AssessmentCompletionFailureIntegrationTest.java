@@ -133,8 +133,18 @@ class AssessmentCompletionFailureIntegrationTest {
         @Bean
         @Primary
         MlGateway failingMlGateway() {
-            return request -> {
-                throw new MlGatewayException("ML_TEST_FAILURE", "sensitive upstream detail");
+            return new MlGateway() {
+                @Override
+                public com.cau.capstone8.backend.integration.ml.MlProfileResult calculateProfile(
+                        com.cau.capstone8.backend.integration.ml.MlProfileRequest request) {
+                    throw new MlGatewayException("ML_TEST_FAILURE", "sensitive upstream detail");
+                }
+
+                @Override
+                public com.cau.capstone8.backend.integration.ml.MlRankResult rank(
+                        com.cau.capstone8.backend.integration.ml.MlRankRequest request) {
+                    throw new MlGatewayException("ML_TEST_FAILURE", "sensitive upstream detail");
+                }
             };
         }
     }

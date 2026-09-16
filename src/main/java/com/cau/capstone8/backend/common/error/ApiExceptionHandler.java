@@ -3,6 +3,8 @@ package com.cau.capstone8.backend.common.error;
 import com.cau.capstone8.backend.assessment.AssessmentStateConflictException;
 import com.cau.capstone8.backend.assessment.QuestionBankUnavailableException;
 import com.cau.capstone8.backend.integration.ml.MlGatewayException;
+import com.cau.capstone8.backend.recommendation.RecommendationConflictException;
+import com.cau.capstone8.backend.recommendation.RecommendationInputUnusableException;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +35,14 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MlGatewayException.class)
     ResponseEntity<ApiError> mlGateway(MlGatewayException ex) {
         return error(502, ex.getFailureCode(), "ML 서비스 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+    @ExceptionHandler(RecommendationConflictException.class)
+    ResponseEntity<ApiError> recommendationConflict(RecommendationConflictException ex) {
+        return error(409, "RECOMMENDATION_CONFLICT", ex.getMessage());
+    }
+    @ExceptionHandler(RecommendationInputUnusableException.class)
+    ResponseEntity<ApiError> recommendationInputUnusable(RecommendationInputUnusableException ex) {
+        return error(422, "RECOMMENDATION_INPUT_UNUSABLE", ex.getMessage());
     }
     @ExceptionHandler({HandlerMethodValidationException.class, MethodArgumentTypeMismatchException.class,
             MissingServletRequestParameterException.class})
