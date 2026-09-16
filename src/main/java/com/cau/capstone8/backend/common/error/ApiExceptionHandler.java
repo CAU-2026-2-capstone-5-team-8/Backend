@@ -32,7 +32,12 @@ public class ApiExceptionHandler {
     }
     @ExceptionHandler(MlGatewayException.class)
     ResponseEntity<ApiError> mlGateway(MlGatewayException ex) {
-        return error(502, ex.getFailureCode(), "ML 서비스 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        int status = switch (ex.getFailureCode()) {
+            case "ML_TIMEOUT" -> 504;
+            case "ML_UNAVAILABLE" -> 503;
+            default -> 502;
+        };
+        return error(status, ex.getFailureCode(), "ML 서비스 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     }
     @ExceptionHandler({HandlerMethodValidationException.class, MethodArgumentTypeMismatchException.class,
             MissingServletRequestParameterException.class})
