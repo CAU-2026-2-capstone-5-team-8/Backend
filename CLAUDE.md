@@ -25,7 +25,7 @@ Flyway owns all DDL (`src/main/resources/db/migration`, `VyyyyMMddHHmmss__descri
 
 ## Current stage
 
-Implemented on this branch: topic/book catalog APIs (stage 3), the assessment/question-bank schema, and POST creation, GET retrieval, PUT self-report answers (stage 4). There are six business endpoints; completion/profile/recommendation/ML remain unimplemented. Answers use a required non-null Boolean `knowsConcept`, not selectedOptionId. Stage plan, target API contract (11 endpoints total), and ML contracts live in `docs/design.md`. `docs/implementation-plan.md` is the archived stage 2 plan, not the current status. Check PR merge state separately from branch implementation.
+Implemented on this branch: catalog (stage 3), self-report assessment (stage 4), completion/profile (stage 5), and recommendation/feedback (stage 6), for 11 business endpoints. The in-process `stub` computes profiles and rankings; the HTTP Python adapter (stage 7) and full end-to-end handoff (stage 8) remain unimplemented. Assessment answers use a required non-null Boolean `knowsConcept`, not selectedOptionId. The stage plan and ML contracts live in `docs/design.md`; `docs/implementation-plan.md` is the archived stage 2 plan. Check PR merge state separately from branch implementation.
 
 ## Collaboration
 
