@@ -19,6 +19,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -232,7 +233,9 @@ public class RecommendationService {
                     candidate.knowledge(), candidate.comprehension(), candidate.topicRelevance(),
                     ranked.reasons()));
         }
-        run.succeed(result.modelVersion(), OffsetDateTime.now(ZoneOffset.UTC));
+        // PostgreSQL timestamptz stores microsecond precision; truncate here so the completedAt
+        // in this call's response matches what a later replay reads back from the DB exactly.
+        run.succeed(result.modelVersion(), OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS));
         return new Finish(toResponse(run), null);
     }
 
