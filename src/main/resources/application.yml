@@ -41,6 +41,9 @@ management:
 
 ml:
   mode: ${ML_MODE:stub}
+  base-url: ${ML_BASE_URL:http://127.0.0.1:8000}
+  connect-timeout: ${ML_CONNECT_TIMEOUT:PT2S}
+  read-timeout: ${ML_READ_TIMEOUT:PT10S}
 
 assessment:
   processing-lease: ${ASSESSMENT_PROCESSING_LEASE:PT30S}
