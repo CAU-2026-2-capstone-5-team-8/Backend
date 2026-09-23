@@ -92,6 +92,12 @@ class HttpMlGatewayTest {
                         .doesNotHaveBean(HttpMlGateway.class));
     }
 
+    @Test void reportsRankingUnavailableUntilHttpRankIsImplemented() {
+        assertThatThrownBy(() -> gateway.rankBooks(null))
+                .isInstanceOfSatisfying(MlGatewayException.class,
+                        ex -> assertThat(ex.getFailureCode()).isEqualTo("ML_RANK_UNAVAILABLE"));
+    }
+
     void assertFailure(String code) {
         assertThatThrownBy(() -> gateway.calculateProfile(request))
                 .isInstanceOfSatisfying(MlGatewayException.class,
