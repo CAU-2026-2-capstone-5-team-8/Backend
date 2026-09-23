@@ -11,7 +11,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import tools.jackson.databind.json.JsonMapper;
 
 class HttpMlGatewayTest {
     WireMockServer server;
@@ -29,29 +28,76 @@ class HttpMlGatewayTest {
     }
     @AfterEach void stop() { server.stop(); }
 
+    /** Shape captured from the Python service's POST /ml/reader-profile (bookmatch_ml main). */
     String validJson() {
-        return JsonMapper.builder().build().writeValueAsString(new StubMlGateway().calculateProfile(request));
+        return """
+                {"userId":1,"assessmentId":"assessment-1","topicId":"OS",
+                 "vocabulary":1.0,"backgroundKnowledge":1.0,"comprehension":1.0,
+                 "dimensionDetails":[
+                   {"questionType":"vocabulary","score":1.0,"responseCount":1,"earnedWeight":1.0,"availableWeight":1.0},
+                   {"questionType":"background_knowledge","score":1.0,"responseCount":1,"earnedWeight":1.0,"availableWeight":1.0},
+                   {"questionType":"comprehension","score":1.0,"responseCount":1,"earnedWeight":1.0,"availableWeight":1.0}],
+                 "conceptReadiness":[
+                   {"conceptId":"concept-VOCABULARY","score":1.0,"responseCount":1,"earnedWeight":1.0,"availableWeight":1.0}],
+                 "responseCount":3,"profileVersion":"reader-v1","configVersion":"reader-config-v1",
+                 "configHash":"sha256:7dd4d891db7a9fbe7527142a6f23d0ade62b94193b18fcc9ce02789b89334219"}
+                """.replaceAll("\\s+", "");
     }
 
-    @Test void postsSnapshotAndReturnsValidatedProfile() {
+    @Test void postsPythonWireFormatAndReturnsValidatedProfile() {
         server.stubFor(post("/ml/reader-profile").willReturn(okJson(validJson())));
-        assertThat(gateway.calculateProfile(request).vocabulary()).isEqualTo(1);
+
+        MlProfileResult result = gateway.calculateProfile(request);
+
+        assertThat(result.vocabulary()).isEqualTo(1);
+        assertThat(result.requestId()).isEqualTo(request.requestId());
+        assertThat(result.calculationVersion()).isEqualTo("reader-v1");
+        assertThat(result.dimensionCounts()).containsEntry(MeasurementArea.VOCABULARY, 1)
+                .containsEntry(MeasurementArea.BACKGROUND_KNOWLEDGE, 1)
+                .containsEntry(MeasurementArea.COMPREHENSION, 1);
+        assertThat(result.evidence()).containsEntry("method", "ml-http-reader-profile")
+                .containsEntry("configVersion", "reader-config-v1")
+                .containsKeys("configHash", "dimensionDetails", "conceptReadiness");
         server.verify(1, postRequestedFor(urlEqualTo("/ml/reader-profile"))
-                .withRequestBody(matchingJsonPath("$.requestId", equalTo(request.requestId().toString())))
-                .withRequestBody(matchingJsonPath("$.answers[0].conceptId", equalTo("concept-VOCABULARY"))));
+                .withRequestBody(matchingJsonPath("$.assessmentId", equalTo("assessment-1")))
+                .withRequestBody(matchingJsonPath("$.responses[0].questionType", equalTo("vocabulary")))
+                .withRequestBody(matchingJsonPath("$.responses[0].topicId", equalTo("OS")))
+                .withRequestBody(matchingJsonPath("$.responses[0].difficulty", equalTo("easy")))
+                .withRequestBody(matchingJsonPath("$.responses[0].correct", equalTo("true")))
+                .withRequestBody(matchingJsonPath("$.responses[0].conceptId", equalTo("concept-VOCABULARY")))
+                // The Python DTOs forbid unknown fields, so backend-only fields must not be sent.
+                .withRequestBody(notContaining("requestId"))
+                .withRequestBody(notContaining("contractVersion"))
+                .withRequestBody(notContaining("knowsConcept"))
+                .withRequestBody(notContaining("points")));
+    }
+
+    @ParameterizedTest @ValueSource(ints = {1, 2, 3, 4, 5})
+    void mapsBackendDifficultyToPythonBands(int difficulty) {
+        assertThat(MlProfileHttpContract.difficultyBand(difficulty))
+                .isEqualTo(difficulty <= 2 ? "easy" : difficulty == 3 ? "medium" : "hard");
     }
 
     @ParameterizedTest @ValueSource(strings = {"{}", "not-json", "null",
-            "missing-score", "null-score", "wrong-id", "wrong-version", "bad-count", "bad-score"})
+            "missing-score", "null-score", "bad-score", "wrong-assessment", "wrong-topic", "wrong-user",
+            "bad-count", "bad-response-count", "unknown-dimension", "bad-hash", "missing-version",
+            "missing-details"})
     void rejectsInvalidResponses(String kind) {
         String body = validJson();
         body = switch (kind) {
             case "missing-score" -> body.replace("\"vocabulary\":1.0,", "");
             case "null-score" -> body.replace("\"vocabulary\":1.0", "\"vocabulary\":null");
-            case "wrong-id" -> body.replace(request.requestId().toString(), UUID.randomUUID().toString());
-            case "wrong-version" -> body.replace("\"v1\"", "\"v2\"");
-            case "bad-count" -> body.replace("\"VOCABULARY\":1", "\"VOCABULARY\":99");
             case "bad-score" -> body.replace("\"vocabulary\":1.0", "\"vocabulary\":2.0");
+            case "wrong-assessment" -> body.replace("\"assessment-1\"", "\"assessment-2\"");
+            case "wrong-topic" -> body.replace("\"topicId\":\"OS\"", "\"topicId\":\"DB\"");
+            case "wrong-user" -> body.replace("\"userId\":1", "\"userId\":2");
+            case "bad-count" -> body.replaceFirst("\"responseCount\":1", "\"responseCount\":2");
+            case "bad-response-count" -> body.replace("\"responseCount\":3", "\"responseCount\":4");
+            case "unknown-dimension" -> body.replace("\"comprehension\",\"score\"", "\"reading\",\"score\"");
+            case "bad-hash" -> body.replace("sha256:7dd4", "md5:7dd4");
+            case "missing-version" -> body.replace("\"profileVersion\":\"reader-v1\",", "");
+            case "missing-details" -> body.replaceAll(
+                    "\"dimensionDetails\":\\[.*?\\],\"conceptReadiness\"", "\"conceptReadiness\"");
             default -> kind;
         };
         server.stubFor(post("/ml/reader-profile").willReturn(okJson(body)));

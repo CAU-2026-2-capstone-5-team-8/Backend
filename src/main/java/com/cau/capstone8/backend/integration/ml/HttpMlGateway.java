@@ -16,7 +16,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Profile-only HTTP transport. Ranking is intentionally outside this slice. */
+/** Profile-only HTTP transport in the Python service's wire format; ranking is a later slice. */
 @Component
 @ConditionalOnProperty(name = "ml.mode", havingValue = "http")
 public class HttpMlGateway implements MlGateway {
@@ -52,7 +52,8 @@ public class HttpMlGateway implements MlGateway {
         String body;
         try {
             body = client.post().uri("/ml/reader-profile").contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON).body(json.writeValueAsString(request))
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(json.writeValueAsString(MlProfileHttpContract.toWire(request)))
                     .retrieve()
                     .onStatus(status -> !status.is2xxSuccessful(), (req, response) -> {
                         throw new MlGatewayException("ML_UPSTREAM_ERROR", "ML 서비스가 요청을 처리하지 못했습니다.");
@@ -74,7 +75,9 @@ public class HttpMlGateway implements MlGateway {
             for (String score : new String[]{"vocabulary", "backgroundKnowledge", "comprehension"}) {
                 if (!tree.path(score).isNumber()) throw new IllegalArgumentException();
             }
-            return MlProfileResponseValidator.validate(request, json.treeToValue(tree, MlProfileResult.class));
+            var response = json.treeToValue(tree, MlProfileHttpContract.ProfileResponse.class);
+            return MlProfileResponseValidator.validate(
+                    request, MlProfileHttpContract.fromWire(request, response, json));
         } catch (MlGatewayException ex) {
             throw ex;
         } catch (RuntimeException ex) {
