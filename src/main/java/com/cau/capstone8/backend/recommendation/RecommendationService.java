@@ -100,8 +100,7 @@ public class RecommendationService {
                     mlGateway.rankBooks(claim.rankRequest()));
         } catch (RuntimeException exception) {
             RecommendationFailureException failure = failureFrom(exception);
-            recover(claim.runId(), claim.attemptId(), failure);
-            throw failure;
+            throw recover(claim.runId(), claim.attemptId(), failure);
         }
 
         Finish finished = transactions.execute(
@@ -215,12 +214,14 @@ public class RecommendationService {
         RecommendationRun run = runs.findByIdForUpdate(runId)
                 .orElseThrow(() -> new ResourceNotFoundException("추천 요청을 찾을 수 없습니다."));
         if (!run.ownsAttempt(attemptId)) {
+            if (run.getStatus() == RecommendationStatus.FAILED) {
+                return new Finish(null, savedFailure(run));
+            }
             throw new RecommendationConflictException("추천 처리 권한이 만료되었습니다.");
         }
         if (!run.hasActiveLease(OffsetDateTime.now(ZoneOffset.UTC))) {
             expireIfNeeded(run);
-            return new Finish(null, new RecommendationFailureException(
-                    run.getLastFailureCode(), run.getLastFailureMessage(), run.getFailureHttpStatus()));
+            return new Finish(null, savedFailure(run));
         }
         Map<Long, MlRankRequest.Candidate> candidates = request.candidates().stream()
                 .collect(Collectors.toMap(MlRankRequest.Candidate::bookId, Function.identity()));
@@ -239,19 +240,38 @@ public class RecommendationService {
         return new Finish(toResponse(run), null);
     }
 
-    private void recover(long runId, UUID attemptId, RecommendationFailureException failure) {
+    private RecommendationFailureException recover(
+            long runId, UUID attemptId, RecommendationFailureException failure) {
         try {
-            transactions.executeWithoutResult(status -> {
+            RecommendationFailureException recovered = transactions.execute(status -> {
                 RecommendationRun run = runs.findByIdForUpdate(runId).orElse(null);
-                if (run != null && run.ownsAttempt(attemptId)) {
+                if (run == null) {
+                    return failure;
+                }
+                if (run.ownsAttempt(attemptId)) {
+                    if (!run.hasActiveLease(OffsetDateTime.now(ZoneOffset.UTC))) {
+                        expireIfNeeded(run);
+                        return savedFailure(run);
+                    }
                     run.fail(failure.getFailureCode(), failure.getMessage(),
                             failure.getHttpStatus(), OffsetDateTime.now(ZoneOffset.UTC));
+                    return failure;
                 }
+                return run.getStatus() == RecommendationStatus.FAILED
+                        ? savedFailure(run)
+                        : failure;
             });
+            return recovered == null ? failure : recovered;
         } catch (RuntimeException recoveryFailure) {
             LOG.error("추천 실패 상태 저장 실패 runId={}; 임대 만료 후 재조회에서 복구합니다.",
                     runId, recoveryFailure);
+            return failure;
         }
+    }
+
+    private RecommendationFailureException savedFailure(RecommendationRun run) {
+        return new RecommendationFailureException(
+                run.getLastFailureCode(), run.getLastFailureMessage(), run.getFailureHttpStatus());
     }
 
     private void expireIfNeeded(RecommendationRun run) {

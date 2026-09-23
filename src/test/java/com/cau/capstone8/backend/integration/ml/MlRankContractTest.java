@@ -70,6 +70,21 @@ class MlRankContractTest {
                 .isInstanceOf(MlGatewayException.class);
     }
 
+    @Test
+    void validatorRejectsScoresThatIncreaseWithRank() {
+        MlRankRequest request = request(null, 2);
+        MlRankResult incorrectlyOrdered = new MlRankResult(
+                request.requestId(),
+                request.contractVersion(),
+                "rank-v1",
+                List.of(
+                        item(10, 1, 0.4),
+                        item(20, 2, 0.8)));
+
+        assertThatThrownBy(() -> MlRankResponseValidator.validate(request, incorrectlyOrdered))
+                .isInstanceOf(MlGatewayException.class);
+    }
+
     private MlRankRequest request(Long targetBookId, int limit) {
         return new MlRankRequest(
                 UUID.fromString("00000000-0000-0000-0000-000000000010"),

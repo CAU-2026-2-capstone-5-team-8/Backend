@@ -26,12 +26,14 @@ public final class MlRankResponseValidator {
                 .map(MlRankRequest.Candidate::bookId)
                 .collect(java.util.stream.Collectors.toSet());
         Set<Long> returnedBooks = new HashSet<>();
+        double previousScore = Double.POSITIVE_INFINITY;
         for (int index = 0; index < result.items().size(); index++) {
             MlRankResult.Item item = result.items().get(index);
             if (item == null || item.rank() != index + 1
                     || !requestedBooks.contains(item.bookId())
                     || !returnedBooks.add(item.bookId())
-                    || !validScore(item.score()) || !validScore(item.topicFit())
+                    || !validScore(item.score()) || item.score() > previousScore
+                    || !validScore(item.topicFit())
                     || !validScore(item.vocabularyFit()) || !validScore(item.knowledgeFit())
                     || !validScore(item.comprehensionFit()) || item.reasons() == null
                     || item.reasons().size() < 2
@@ -39,6 +41,7 @@ public final class MlRankResponseValidator {
                             reason -> reason == null || reason.isBlank())) {
                 throw invalidResponse();
             }
+            previousScore = item.score();
         }
         if (request.targetBookId() != null
                 && !request.targetBookId().equals(result.items().getFirst().bookId())) {

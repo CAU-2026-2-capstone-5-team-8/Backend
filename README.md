@@ -111,7 +111,7 @@ WSL 주소는 재시작 후 바뀔 수 있으므로 매번 조회합니다. 이 
 | POSTGRES_HOST | localhost |
 | POSTGRES_PORT | 5432 |
 | SERVER_PORT | 8080 |
-| ML_MODE | `stub`(기본값). 현재 지원하는 결정론적 프로필 계산 모드 |
+| ML_MODE | `stub`(기본값). 현재 지원하는 결정론적 프로필·추천 계산 모드 |
 | ASSESSMENT_PROCESSING_LEASE | 완료 처리 소유권 임대 시간. 기본값 `PT30S` |
 | RECOMMENDATION_PROCESSING_LEASE | 추천 처리 소유권 임대 시간. 기본값 `PT30S` |
 

@@ -86,6 +86,7 @@ class RecommendationFailureIntegrationTest {
     void lateMlResultCannotFinalizeExpiredAttempt() throws Exception {
         long userId = userWithProfile();
         gateway.expireDuringRanking = true;
+        gateway.failAfterExpiry = false;
         String key = UUID.randomUUID().toString();
 
         HttpResponse<String> response = create(userId, key);
@@ -103,10 +104,75 @@ class RecommendationFailureIntegrationTest {
     }
 
     @Test
+    void lateMlFailureReturnsPersistedExpirationFailure() throws Exception {
+        long userId = userWithProfile();
+        gateway.expireDuringRanking = true;
+        gateway.failAfterExpiry = true;
+        String key = UUID.randomUUID().toString();
+        try {
+            HttpResponse<String> response = create(userId, key);
+            long runId = runId(userId, key);
+
+            assertThat(response.statusCode()).isEqualTo(409);
+            assertThat(json.readTree(response.body()).path("code").asString())
+                    .isEqualTo("RECOMMENDATION_EXPIRED");
+            JsonNode saved = json.readTree(get(runId).body());
+            assertThat(saved.path("status").asString()).isEqualTo("FAILED");
+            assertThat(saved.path("failureCode").asString())
+                    .isEqualTo("RECOMMENDATION_EXPIRED");
+            assertThat(saved.path("items").size()).isZero();
+        } finally {
+            gateway.failAfterExpiry = false;
+        }
+    }
+
+    @Test
+    void lateCompletionReturnsExpirationAlreadyPersistedByGet() throws Exception {
+        long userId = userWithProfile();
+        String key = UUID.randomUUID().toString();
+        gateway.expireDuringRanking = false;
+        gateway.failAfterExpiry = false;
+        gateway.blockDuringRanking = true;
+        gateway.started = new CountDownLatch(1);
+        gateway.release = new CountDownLatch(1);
+        try {
+            CompletableFuture<HttpResponse<String>> first = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return create(userId, key);
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            });
+            assertThat(gateway.started.await(5, TimeUnit.SECONDS)).isTrue();
+            long runId = runId(userId, key);
+            jdbc.update("update backend.recommendation_run "
+                    + "set processing_expires_at=now()-interval '1 second' where id=?", runId);
+
+            HttpResponse<String> expiredByGet = get(runId);
+            assertThat(expiredByGet.statusCode()).isEqualTo(200);
+            assertThat(json.readTree(expiredByGet.body()).path("failureCode").asString())
+                    .isEqualTo("RECOMMENDATION_EXPIRED");
+
+            gateway.release.countDown();
+            HttpResponse<String> lateCompletion = first.get(10, TimeUnit.SECONDS);
+            assertThat(lateCompletion.statusCode()).isEqualTo(409);
+            assertThat(json.readTree(lateCompletion.body()).path("code").asString())
+                    .isEqualTo("RECOMMENDATION_EXPIRED");
+            assertThat(jdbc.queryForObject(
+                    "select count(*) from backend.recommendation_item where run_id=?",
+                    Integer.class, runId)).isZero();
+        } finally {
+            gateway.release.countDown();
+            gateway.blockDuringRanking = false;
+        }
+    }
+
+    @Test
     void concurrentRequestWithSameKeyConflictsWhileFirstIsProcessing() throws Exception {
         long userId = userWithProfile();
         String key = UUID.randomUUID().toString();
         gateway.expireDuringRanking = false;
+        gateway.failAfterExpiry = false;
         gateway.blockDuringRanking = true;
         gateway.started = new CountDownLatch(1);
         gateway.release = new CountDownLatch(1);
@@ -199,6 +265,7 @@ class RecommendationFailureIntegrationTest {
     static class ControlledGateway implements MlGateway {
         private final JdbcTemplate jdbc;
         volatile boolean expireDuringRanking;
+        volatile boolean failAfterExpiry;
         volatile boolean blockDuringRanking;
         volatile CountDownLatch started;
         volatile CountDownLatch release;
@@ -233,6 +300,9 @@ class RecommendationFailureIntegrationTest {
                             + "set processing_expires_at=now()-interval '1 second' "
                             + "where attempt_id=?",
                     request.requestId());
+            if (failAfterExpiry) {
+                throw new MlGatewayException("ML_TEST_FAILURE", "private upstream secret");
+            }
             return new StubMlGateway().rankBooks(request);
         }
     }
