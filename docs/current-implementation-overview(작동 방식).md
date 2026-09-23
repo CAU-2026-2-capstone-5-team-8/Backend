@@ -9,11 +9,11 @@
 ```
 
 - **Spring Boot가 전부 담당한다.** API, 검증, DB 저장, 응답 생성까지 전부 Spring Boot 안에서 처리된다.
-- **Python ML 서비스와의 HTTP 통신은 아직 없다.** 대신 같은 계약을 구현한 결정론적 `stub`이 영역별 자기평가 비율로 독자 프로필을 계산한다.
+- **Python ML 서비스와의 HTTP 통신은 아직 없다.** 대신 결정론적 `stub`이 영역별 자기평가 비율로 독자 프로필을 계산하고, 준비도와 활성 도서 특성으로 추천을 계산한다.
 - **인증이 없다.** 로그인 없이 `userId`를 그냥 요청 값으로 받는다. 실제 서비스가 아니라 프로토타입이기 때문.
-- 코드는 기능별 폴더로 나뉜다: `topic`(분야), `book`(도서), `assessment`(진단), `profile`(독자 프로필), `integration.ml`(계산 경계), `user`(사용자), `common.error`(에러 처리 공통)
+- 코드는 기능별 폴더로 나뉜다: `topic`(분야), `book`(도서), `assessment`(진단), `profile`(독자 프로필), `recommendation`(추천·피드백), `integration.ml`(계산 경계), `user`(사용자), `common.error`(에러 처리 공통)
 
-## 2. 지금 실제로 동작하는 API 8개
+## 2. 지금 실제로 동작하는 API 11개
 
 ### 2-1. 분야 목록 조회
 
@@ -129,6 +129,39 @@ GET /api/users/{userId}/profiles/{topicId}
 
 해당 사용자·분야의 완료된 프로필 중 완료 시각 내림차순, 동률이면 프로필 ID 내림차순으로 1건을 반환한다. 프로필이 없으면 404다.
 
+### 2-9. 추천 생성
+
+```http
+POST /api/recommendations
+Idempotency-Key: demo-recommendation-1
+Content-Type: application/json
+
+{"userId":1,"topicId":2,"challengeLevel":"BALANCED","topK":5}
+```
+
+최신 완료 프로필을 사용하고, 해당 분야에 직접 속하며 활성 `book_feature`가 있는 도서만 후보로 선택한다. `targetBookId`가 있으면 해당 도서 1권만 계산하며 `topK`는 무시한다. 후보가 없거나 대상 도서에 활성 특성이 없으면 422, 프로필이 없으면 409다. `COMFORTABLE`/`BALANCED`/`CHALLENGING`을 고르면 stub은 각 영역 목표 준비도에 각각 -0.2/0/+0.2를 더한 뒤 [0,1]로 제한한다. 주제 적합도와 영역별 거리 적합도 4개의 평균으로 순위를 매기고 동점은 도서 ID 오름차순이다. 실제 학습 모델이나 과학적 진단은 아니다.
+
+처리 시작 시 사용자 행 잠금 아래 멱등성 키와 입력 해시, 독자 프로필과 후보 특성 스냅샷, UUID 처리 임대를 저장한다. 계산은 DB 트랜잭션 밖에서 실행한다. 임대·소유권을 다시 확인해 추천 항목, 점수 4종과 이유를 원자적으로 저장한다. 새 성공은 201, 같은 사용자·키·내용으로 재호출한 성공은 200이다. 같은 키·다른 입력 또는 진행 중 중복 요청은 409. 실패한 키는 정제된 오류를 그대로 반환하고 새 계산에는 새 키를 사용한다. 인증 기능이 없으므로 userId와 키 조합은 데모용 식별자다.
+
+### 2-10. 추천 결과 재조회
+
+```
+GET /api/recommendations/{runId}
+```
+
+`PROCESSING`, `SUCCEEDED`, `FAILED` 상태와 사용한 프로필 ID, 대상·후보 수, 점수와 사유를 반환한다. 실패 사유는 정제된 코드·메시지만 포함한다. 처리 임대가 만료된 `PROCESSING`은 조회할 때 `FAILED`로 정리한다. 없는 run은 404다.
+
+### 2-11. 추천 피드백 등록·교체
+
+```http
+POST /api/recommendations/{itemId}/feedback
+Content-Type: application/json
+
+{"userId":1,"helpful":true,"comment":"도움이 됐어요"}
+```
+
+완료된 추천 항목에만 해당 추천의 사용자 ID로 피드백을 남길 수 있다. 첫 저장은 201, 같은 사용자의 재제출은 기존 행을 교체해 200, 다른 사용자는 409다. `comment`는 선택 사항이며 최대 1000자다.
+
 ## 3. DB에 실제로 만들어진 테이블
 
 | 테이블 | 상태 | 비고 |
@@ -141,13 +174,14 @@ GET /api/users/{userId}/profiles/{topicId}
 | `assessment_question` | 호출 시 저장 | 세션당 9행, 영역·문구·버전·난이도 스냅샷 |
 | `assessment_answer` | 호출 시 저장 | `PUT .../answers/...` 호출할 때마다 |
 | `reader_profile` | 완료 시 저장 | 세션당 최대 1행, 점수 3종·계산 버전·근거 JSON |
-| `recommendation_run`, `recommendation_item`, `feedback` | **테이블 자체가 아직 없음** | 6단계에서 마이그레이션부터 추가해야 함 |
+| `recommendation_run` | 추천 생성 시 저장 | 멱등성 키, 입력·후보 스냅샷, 상태·처리 임대, 후보 제외 개수 |
+| `recommendation_item` | 성공 시 저장 | 도서·특성 버전·각 점수·이유; run 내 도서와 순위 각각 유일 |
+| `feedback` | 요청 시 저장 | 사용자·추천 항목별 최대 1행, 재제출은 교체 |
 
 ## 4. 아직 안 되는 것 (자주 헷갈리는 부분 정리)
 
-- ❌ 책 추천받기 (`POST /api/recommendations` 없음)
-- ❌ 추천에 피드백 남기기 (`POST .../feedback` 없음)
 - ❌ 실제 Python ML 서버와 HTTP 통신 (`stub` 계산만 구현됨)
+- ❌ Data-Pipeline의 실제 도서 10권 자동 적재 (현재 합성 데모 도서 5권)
 - ❌ 로그인/인증 (userId를 그냥 숫자로 보냄)
 
 ## 5. 직접 실행해서 확인하는 법
