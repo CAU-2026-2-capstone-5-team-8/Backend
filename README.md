@@ -158,7 +158,7 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 
 `POST /api/assessments/{sessionId}/complete`는 9개 답변을 확인한 뒤 짧은 트랜잭션에서 UUID 처리 소유권과 기본 30초 임대를 확보합니다. 계산은 트랜잭션 밖에서 실행하고, 다시 소유권을 확인한 뒤 프로필 저장과 `COMPLETED` 전이를 함께 커밋합니다. 완료 요청을 재시도하면 기존 프로필을 반환하며, 진행 중인 중복 요청은 409입니다. ML 실패 시 내부 상세를 노출하지 않고 세션을 `IN_PROGRESS`로 되돌립니다.
 
-`ml.mode=stub`용 `MlGateway`와 프로필·추천 요청/응답 검증은 구현되어 있습니다. 추천도 짧은 트랜잭션에서 요청/후보 스냅샷과 처리 임대를 저장하고, DB 트랜잭션 밖에서 계산한 뒤 소유권을 재확인하여 항목과 성공 상태를 함께 저장합니다. 응답이 늦어 임대가 만료되거나 ML 계산이 실패하면 내부 상세 없이 실패 상태만 남깁니다. `ml.mode=http`의 RestClient 기반 Python 호출은 후속 단계입니다. HTTP 장애를 stub 성공으로 자동 전환하지 않습니다.
+`ml.mode=stub`용 `MlGateway`와 프로필·추천 요청/응답 검증은 구현되어 있습니다. 추천도 짧은 트랜잭션에서 요청/후보 스냅샷과 처리 임대를 저장하고, DB 트랜잭션 밖에서 계산한 뒤 소유권을 재확인하여 항목과 성공 상태를 함께 저장합니다. 응답이 늦어 임대가 만료되거나 ML 계산이 실패하면 내부 상세 없이 실패 상태만 남깁니다. `ml.mode=http`의 RestClient 기반 프로필 호출은 구현됐지만 `/ml/rank` 호출은 후속 단계입니다. HTTP 장애를 stub 성공으로 자동 전환하지 않습니다.
 
 인증 추가 시 클라이언트가 보내는 userId를 신뢰하는 데모 방식을 인증된 `/api/me`로 바꿉니다.
 
@@ -172,4 +172,4 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 - [3단계 구현 계획](docs/superpowers/plans/2026-09-12-catalog.md)
 - [3단계 검증 결과](docs/verification-stage3.md)
 
-다음 단계는 별도 브랜치의 7단계 HTTP ML 연동입니다. [5단계 검증](docs/verification-stage5.md)과 [6단계 검증](docs/verification-stage6.md)을 참고하세요.
+다음 단계는 `/ml/rank` HTTP 연동과 실제 Python ML 서버를 사용한 전체 E2E 검증입니다. [5단계 검증](docs/verification-stage5.md)과 [6단계 검증](docs/verification-stage6.md)을 참고하세요.
