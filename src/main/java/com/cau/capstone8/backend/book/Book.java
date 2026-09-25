@@ -10,10 +10,12 @@ public class Book {
     @Column(nullable = false, length = 200) private String author;
     @Column(nullable = false, columnDefinition = "text") private String description;
     @Column(length = 20) private String isbn;
+    @Column(name = "ml_book_id", length = 200) private String mlBookId;
     protected Book() {}
     public Long getId() { return id; }
     public String getTitle() { return title; }
     public String getAuthor() { return author; }
     public String getDescription() { return description; }
     public String getIsbn() { return isbn; }
+    public String getMlBookId() { return mlBookId; }
 }

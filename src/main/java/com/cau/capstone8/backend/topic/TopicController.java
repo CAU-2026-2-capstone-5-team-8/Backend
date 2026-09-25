@@ -12,7 +12,8 @@ public class TopicController {
     @GetMapping
     public List<TopicResponse> list() {
         return topics.findAllByOrderByIdAsc().stream()
-                .map(t -> new TopicResponse(t.getId(), t.getCode(), t.getName(), t.getParentId())).toList();
+                .map(t -> new TopicResponse(
+                        t.getId(), t.getCode(), t.getName(), t.getMlTopicId(), t.getParentId())).toList();
     }
-    public record TopicResponse(long id, String code, String name, Long parentId) {}
+    public record TopicResponse(long id, String code, String name, String mlTopicId, Long parentId) {}
 }

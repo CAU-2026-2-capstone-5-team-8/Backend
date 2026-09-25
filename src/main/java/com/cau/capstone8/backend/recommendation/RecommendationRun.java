@@ -71,6 +71,33 @@ public class RecommendationRun {
     @Column(name = "model_version", length = 80)
     private String modelVersion;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ranking_mode", nullable = false, length = 40)
+    private RecommendationRankingMode rankingMode;
+
+    @Column(name = "ranking_config_version", length = 80)
+    private String rankingConfigVersion;
+    @Column(name = "ranking_config_hash", length = 71)
+    private String rankingConfigHash;
+    @Column(name = "concept_graph_version", length = 80)
+    private String conceptGraphVersion;
+    @Column(name = "concept_graph_hash", length = 71)
+    private String conceptGraphHash;
+    @Column(name = "graph_review_version", length = 80)
+    private String graphReviewVersion;
+    @Column(name = "graph_review_hash", length = 71)
+    private String graphReviewHash;
+    @Column(name = "reader_profile_version", length = 80)
+    private String readerProfileVersion;
+    @Column(name = "reader_config_version", length = 80)
+    private String readerConfigVersion;
+    @Column(name = "reader_config_hash", length = 71)
+    private String readerConfigHash;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ranking_diagnostics", columnDefinition = "jsonb")
+    private Map<String, Object> rankingDiagnostics;
+
     @Column(name = "last_failure_code", length = 40)
     private String lastFailureCode;
 
@@ -99,7 +126,8 @@ public class RecommendationRun {
             OffsetDateTime processingExpiresAt,
             Map<String, Object> inputSnapshot,
             int eligibleCandidateCount,
-            int excludedCandidateCount) {
+            int excludedCandidateCount,
+            RecommendationRankingMode rankingMode) {
         this.userId = userId;
         this.topicId = topicId;
         this.profileId = profileId;
@@ -114,6 +142,7 @@ public class RecommendationRun {
         this.inputSnapshot = Collections.unmodifiableMap(new LinkedHashMap<>(inputSnapshot));
         this.eligibleCandidateCount = eligibleCandidateCount;
         this.excludedCandidateCount = excludedCandidateCount;
+        this.rankingMode = rankingMode;
     }
 
     public boolean ownsAttempt(UUID expectedAttemptId) {
@@ -134,6 +163,32 @@ public class RecommendationRun {
         processingExpiresAt = null;
         modelVersion = newModelVersion;
         completedAt = completionTime;
+    }
+
+    public void succeedV2(
+            String newModelVersion,
+            String newRankingConfigVersion,
+            String newRankingConfigHash,
+            String newConceptGraphVersion,
+            String newConceptGraphHash,
+            String newGraphReviewVersion,
+            String newGraphReviewHash,
+            String newReaderProfileVersion,
+            String newReaderConfigVersion,
+            String newReaderConfigHash,
+            Map<String, Object> newRankingDiagnostics,
+            OffsetDateTime completionTime) {
+        succeed(newModelVersion, completionTime);
+        rankingConfigVersion = newRankingConfigVersion;
+        rankingConfigHash = newRankingConfigHash;
+        conceptGraphVersion = newConceptGraphVersion;
+        conceptGraphHash = newConceptGraphHash;
+        graphReviewVersion = newGraphReviewVersion;
+        graphReviewHash = newGraphReviewHash;
+        readerProfileVersion = newReaderProfileVersion;
+        readerConfigVersion = newReaderConfigVersion;
+        readerConfigHash = newReaderConfigHash;
+        rankingDiagnostics = Collections.unmodifiableMap(new LinkedHashMap<>(newRankingDiagnostics));
     }
 
     public void fail(
@@ -162,6 +217,17 @@ public class RecommendationRun {
     public int getEligibleCandidateCount() { return eligibleCandidateCount; }
     public int getExcludedCandidateCount() { return excludedCandidateCount; }
     public String getModelVersion() { return modelVersion; }
+    public RecommendationRankingMode getRankingMode() { return rankingMode; }
+    public String getRankingConfigVersion() { return rankingConfigVersion; }
+    public String getRankingConfigHash() { return rankingConfigHash; }
+    public String getConceptGraphVersion() { return conceptGraphVersion; }
+    public String getConceptGraphHash() { return conceptGraphHash; }
+    public String getGraphReviewVersion() { return graphReviewVersion; }
+    public String getGraphReviewHash() { return graphReviewHash; }
+    public String getReaderProfileVersion() { return readerProfileVersion; }
+    public String getReaderConfigVersion() { return readerConfigVersion; }
+    public String getReaderConfigHash() { return readerConfigHash; }
+    public Map<String, Object> getRankingDiagnostics() { return rankingDiagnostics; }
     public String getLastFailureCode() { return lastFailureCode; }
     public String getLastFailureMessage() { return lastFailureMessage; }
     public Integer getFailureHttpStatus() { return failureHttpStatus; }

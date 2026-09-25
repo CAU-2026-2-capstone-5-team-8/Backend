@@ -1,0 +1,128 @@
+@backend = http://localhost:8080
+@ml = http://localhost:8000
+@userId = 1
+@topicId = 2
+@idempotencyKey = replace-with-a-new-uuid-per-new-calculation
+
+### 1. Topics
+# @name topics
+GET {{backend}}/api/topics
+
+### 2. Create assessment
+# @name assessment
+POST {{backend}}/api/assessments
+Content-Type: application/json
+
+{"userId":{{userId}},"topicId":{{topicId}}}
+
+### 3. Answer all nine demo questions (change true/false as needed)
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[0].id}}
+Content-Type: application/json
+
+{"knowsConcept":true}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[1].id}}
+Content-Type: application/json
+
+{"knowsConcept":true}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[2].id}}
+Content-Type: application/json
+
+{"knowsConcept":false}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[3].id}}
+Content-Type: application/json
+
+{"knowsConcept":true}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[4].id}}
+Content-Type: application/json
+
+{"knowsConcept":false}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[5].id}}
+Content-Type: application/json
+
+{"knowsConcept":true}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[6].id}}
+Content-Type: application/json
+
+{"knowsConcept":true}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[7].id}}
+Content-Type: application/json
+
+{"knowsConcept":false}
+
+###
+PUT {{backend}}/api/assessments/{{assessment.response.body.$.id}}/answers/{{assessment.response.body.$.questions[8].id}}
+Content-Type: application/json
+
+{"knowsConcept":true}
+
+### 4. Complete assessment (calls real /ml/reader-profile in ML_MODE=http)
+# @name completion
+POST {{backend}}/api/assessments/{{assessment.response.body.$.id}}/complete
+
+### 5. Read persisted profile
+GET {{backend}}/api/users/{{userId}}/profiles/{{topicId}}
+
+### 6. Create v2 recommendation
+# @name recommendation
+POST {{backend}}/api/recommendations
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}
+
+{"userId":{{userId}},"topicId":{{topicId}},"challengeLevel":"BALANCED","topK":5}
+
+### 7. Read recommendation
+GET {{backend}}/api/recommendations/{{recommendation.response.body.$.id}}
+
+### 8. Submit feedback for first result (requires at least one personalizable item)
+POST {{backend}}/api/recommendations/{{recommendation.response.body.$.items[0].id}}/feedback
+Content-Type: application/json
+
+{"userId":{{userId}},"helpful":true,"comment":"v2 추천 수동 확인"}
+
+### Direct ML rank-v2 debugging only; this is not the Frontend/public API.
+# Replace values with an imported candidate projection and the persisted profile provenance.
+POST {{ml}}/ml/rank
+Content-Type: application/json
+
+{
+  "rankingModel": "rank-prerequisite-first-v2",
+  "readerProfile": {
+    "userId": {{userId}},
+    "topicId": "operating-systems",
+    "vocabulary": 0.7,
+    "backgroundKnowledge": 0.7,
+    "comprehension": 0.7,
+    "conceptReadiness": [{"conceptId":"process","score":1.0}],
+    "profileVersion": "reader-v1",
+    "configVersion": "reader-config-v1",
+    "configHash": "replace-with-persisted-sha256-hash"
+  },
+  "candidateBooks": [{
+    "bookId": "isbn13:9780132199087",
+    "topicDistribution": {"operating-systems":1.0},
+    "coveredConcepts": [{"concept":"process","weight":1.0}],
+    "prerequisiteConcepts": [],
+    "lexicalDifficulty": null,
+    "syntacticComplexity": null,
+    "conceptDensity": null,
+    "prerequisiteDemand": null,
+    "featureVersion": "book-v1",
+    "configVersion": "features-v1",
+    "configHash": "replace-with-imported-sha256-hash"
+  }],
+  "limit": 1
+}

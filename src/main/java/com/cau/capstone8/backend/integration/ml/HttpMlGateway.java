@@ -16,7 +16,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Profile-only HTTP transport in the Python service's wire format; ranking is a later slice. */
+/** HTTP transport for the Python profile and explicitly selected prerequisite-first v2 APIs. */
 @Component
 @ConditionalOnProperty(name = "ml.mode", havingValue = "http")
 public class HttpMlGateway implements MlGateway {
@@ -82,6 +82,50 @@ public class HttpMlGateway implements MlGateway {
             throw ex;
         } catch (RuntimeException ex) {
             throw new MlGatewayException("ML_INVALID_RESPONSE", "ML 프로필 응답이 계약과 일치하지 않습니다.", ex);
+        }
+    }
+
+    @Override
+    public MlRankV2Result rankBooksV2(MlRankV2Request request) {
+        String body;
+        try {
+            body = client.post().uri("/ml/rank").contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(json.writeValueAsString(MlRankV2HttpContract.toWire(request)))
+                    .retrieve()
+                    .onStatus(status -> status.value() == 422, (req, response) -> {
+                        throw new MlGatewayException(
+                                "ML_RANK_TARGET_UNAVAILABLE",
+                                "선택한 도서는 현재 프로필 근거로 개인화할 수 없습니다.");
+                    })
+                    .onStatus(status -> !status.is2xxSuccessful(), (req, response) -> {
+                        throw new MlGatewayException(
+                                "ML_UPSTREAM_ERROR", "ML 서비스가 요청을 처리하지 못했습니다.");
+                    }).body(String.class);
+        } catch (MlGatewayException ex) {
+            throw ex;
+        } catch (ResourceAccessException ex) {
+            for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+                if (cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException) {
+                    throw new MlGatewayException("ML_TIMEOUT", "ML 서비스 응답 시간이 초과되었습니다.", ex);
+                }
+            }
+            throw new MlGatewayException("ML_UNAVAILABLE", "ML 서비스에 연결할 수 없습니다.", ex);
+        } catch (RestClientResponseException ex) {
+            throw new MlGatewayException("ML_UPSTREAM_ERROR", "ML 서비스가 요청을 처리하지 못했습니다.", ex);
+        }
+        try {
+            var tree = json.readTree(body);
+            if (tree == null || !tree.isObject()) throw new IllegalArgumentException();
+            MlRankV2HttpContract.RankResponse response =
+                    json.treeToValue(tree, MlRankV2HttpContract.RankResponse.class);
+            return MlRankV2ResponseValidator.validate(
+                    request, MlRankV2HttpContract.fromWire(response));
+        } catch (MlGatewayException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new MlGatewayException(
+                    "ML_INVALID_RESPONSE", "ML 랭킹 응답이 v2 계약과 일치하지 않습니다.", ex);
         }
     }
 }
