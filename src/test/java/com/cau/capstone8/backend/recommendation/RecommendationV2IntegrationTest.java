@@ -6,6 +6,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import java.net.URI;
@@ -25,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -149,6 +151,27 @@ class RecommendationV2IntegrationTest {
                 "select last_failure_code from backend.recommendation_run where user_id=? "
                         + "order by id desc limit 1", String.class, userId))
                 .isEqualTo("ML_RANK_TARGET_UNAVAILABLE");
+    }
+
+    @Test
+    void rejectsIncompleteSucceededV2ProvenanceAndItemShape() throws Exception {
+        long userId = userWithHttpProfile();
+        ML.stubFor(post("/ml/rank").willReturn(okJson(successJson())));
+
+        HttpResponse<String> created = create(
+                UUID.randomUUID().toString(), body(userId, null, 2));
+
+        assertThat(created.statusCode()).withFailMessage(created.body()).isEqualTo(201);
+        long runId = json.readTree(created.body()).path("id").asLong();
+        long itemId = json.readTree(created.body()).path("items").get(0).path("id").asLong();
+        assertThatThrownBy(() -> jdbc.update(
+                        "update backend.recommendation_run set ranking_config_hash=null where id=?",
+                        runId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                        "update backend.recommendation_item set prerequisite_total_count=null where id=?",
+                        itemId))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private void importRealCandidates() throws Exception {

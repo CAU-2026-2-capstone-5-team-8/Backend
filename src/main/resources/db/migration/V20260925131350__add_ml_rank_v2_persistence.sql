@@ -52,7 +52,7 @@ ALTER TABLE recommendation_run
 ALTER TABLE recommendation_run ADD CONSTRAINT recommendation_run_v2_provenance CHECK (
     ranking_mode = 'LEGACY_SCALAR'
     OR status <> 'SUCCEEDED'
-    OR (
+    OR COALESCE((
         model_version = 'rank-prerequisite-first-v2'
         AND ranking_config_version IS NOT NULL
         AND ranking_config_hash ~ '^sha256:[0-9a-f]{64}$'
@@ -64,7 +64,7 @@ ALTER TABLE recommendation_run ADD CONSTRAINT recommendation_run_v2_provenance C
         AND reader_config_version IS NOT NULL
         AND reader_config_hash ~ '^sha256:[0-9a-f]{64}$'
         AND jsonb_typeof(ranking_diagnostics) = 'object'
-    )
+    ), false)
 );
 
 ALTER TABLE recommendation_item
@@ -96,7 +96,7 @@ ALTER TABLE recommendation_item
     ADD COLUMN book_config_hash varchar(71);
 
 ALTER TABLE recommendation_item ADD CONSTRAINT recommendation_item_mode_shape CHECK (
-    (
+    COALESCE((
         ranking_mode = 'LEGACY_SCALAR'
         AND feature_id IS NOT NULL AND projection_id IS NULL
         AND score IS NOT NULL AND topic_fit IS NOT NULL
@@ -111,9 +111,9 @@ ALTER TABLE recommendation_item ADD CONSTRAINT recommendation_item_mode_shape CH
         AND availability_status IS NULL AND covered_concepts IS NULL
         AND inferred_prerequisites IS NULL AND book_config_version IS NULL
         AND book_config_hash IS NULL
-    )
+    ), false)
     OR
-    (
+    COALESCE((
         ranking_mode = 'PREREQUISITE_FIRST_V2'
         AND feature_id IS NULL AND projection_id IS NOT NULL
         AND score IS NULL AND topic_fit IS NULL AND vocabulary_fit IS NULL
@@ -131,5 +131,5 @@ ALTER TABLE recommendation_item ADD CONSTRAINT recommendation_item_mode_shape CH
         AND jsonb_typeof(inferred_prerequisites) = 'array'
         AND book_config_version IS NOT NULL
         AND book_config_hash ~ '^sha256:[0-9a-f]{64}$'
-    )
+    ), false)
 );

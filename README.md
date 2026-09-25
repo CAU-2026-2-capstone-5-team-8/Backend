@@ -8,7 +8,7 @@ Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당�
 
 추천 API: `POST /api/recommendations` (`Idempotency-Key` 헤더 필수), `GET /api/recommendations/{runId}`, `POST /api/recommendations/{itemId}/feedback`. 추천 요청 예시는 `{"userId":1,"topicId":2,"challengeLevel":"BALANCED","topK":5}`이며, 특정 도서는 `targetBookId`를 추가하면 됩니다. 완료된 독자 프로필과 해당 분야의 활성 도서 특성이 필요합니다. 같은 사용자의 같은 키·같은 입력은 기존 결과를 재생하고, 같은 키·다른 입력이나 처리 중 중복 호출은 409입니다. 실패한 키는 정제된 오류를 재생하므로 새 계산에는 새 키를 사용하세요. 피드백은 `{"userId":1,"helpful":true,"comment":"도움이 됐어요"}` 형식으로 최초 201·재제출 200이며, 소유자가 다르면 409입니다.
 
-VS Code REST Client로 전체 흐름을 수동 확인하려면 [requests/recommendation-v2.http](requests/recommendation-v2.http)의 변수(`userId`, `topicId`, 새 `idempotencyKey`)를 맞춘 뒤 위에서부터 실행하세요. Frontend는 Python 응답이 아니라 Backend recommendation response만 소비합니다.
+VS Code REST Client로 ranking-v2 전체 흐름을 수동 확인하려면 Backend를 `ML_MODE=http`로 시작하고 ML 서버를 함께 실행한 뒤, 대상 도서와 활성 v2 projection이 DB에 import되어 있어야 합니다. [requests/recommendation-v2.http](requests/recommendation-v2.http)의 변수(`userId`, `topicId`, 매 요청마다 새 `idempotencyKey`)를 맞춰 위에서부터 실행하세요. Frontend는 Python 응답이 아니라 Backend recommendation response만 소비합니다.
 
 ## 요구 환경
 

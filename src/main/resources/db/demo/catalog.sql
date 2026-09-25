@@ -5,7 +5,7 @@ ON CONFLICT(demo_key) DO NOTHING;
 INSERT INTO backend.topic(code,name) VALUES ('CS','컴퓨터공학') ON CONFLICT(code) DO NOTHING;
 INSERT INTO backend.topic(code,name,parent_id,ml_topic_id)
 SELECT 'OS','운영체제',id,'operating-systems' FROM backend.topic WHERE code='CS'
-ON CONFLICT(code) DO UPDATE SET ml_topic_id=EXCLUDED.ml_topic_id;
+ON CONFLICT(code) DO NOTHING;
 INSERT INTO backend.book(title,author,description,demo_key)
 SELECT '운영체제 데모 도서 ' || n, '캡스톤 8조',
        '실제 출판물이 아닌 합성 도서입니다. 요구 능력 수치는 기능 검증용이며 추천 정확도를 검증하지 않았습니다.',
