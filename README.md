@@ -2,11 +2,13 @@
 
 Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당하는 독서 진단·추천 프로토타입입니다.
 
-현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단, 5단계 독자 프로필, 6단계 추천·피드백**이 구현되어 있습니다. 총 11개 업무 API를 제공하며 진단은 `knowsConcept`(안다/모른다) 자기평가 방식입니다. 기본 `stub` 모드는 영역별 안다고 답한 문항 비율로 프로필을 만들고, 활성 도서 특성과 준비도 사이의 거리를 사용해 추천을 계산합니다. `ML_MODE=http`는 **프로필 계산만** Python ML의 `/ml/reader-profile`로 연결하며 [설정·계약·한계](docs/ml-profile-http.md)를 참고하세요. `/ml/rank` HTTP 연결과 실제 Python 서버 E2E는 아직 구현 전입니다.
+현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단, 5단계 독자 프로필, 6단계 추천·피드백**이 구현되어 있습니다. 총 11개 업무 API를 제공하며 진단은 `knowsConcept`(안다/모른다) 자기평가 방식입니다. 기본 `stub` 모드는 기존 scalar 프로필·추천을 유지합니다. `ML_MODE=http`는 Python ML의 `/ml/reader-profile`과 명시적 `rank-prerequisite-first-v2` `/ml/rank`를 사용합니다. v2는 scalar score를 만들지 않으며 source-aware concept projection과 저장된 concept readiness를 사용합니다. [프로필 HTTP 계약](docs/ml-profile-http.md)과 [ranking-v2 계약·DB·제약](docs/ml-rank-v2-http.md)을 참고하세요.
 
 진단·프로필 API: `POST /api/assessments`, `GET /api/assessments/{sessionId}`, `PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}`, `POST /api/assessments/{sessionId}/complete`, `GET /api/users/{userId}/profiles/{topicId}`. 답변 요청은 `{"knowsConcept": true}` 또는 `{"knowsConcept": false}`이며, 미응답은 조회 결과에서 `null`입니다. [현재 작동 방식](<docs/current-implementation-overview(작동 방식).md>)을 참고하세요.
 
 추천 API: `POST /api/recommendations` (`Idempotency-Key` 헤더 필수), `GET /api/recommendations/{runId}`, `POST /api/recommendations/{itemId}/feedback`. 추천 요청 예시는 `{"userId":1,"topicId":2,"challengeLevel":"BALANCED","topK":5}`이며, 특정 도서는 `targetBookId`를 추가하면 됩니다. 완료된 독자 프로필과 해당 분야의 활성 도서 특성이 필요합니다. 같은 사용자의 같은 키·같은 입력은 기존 결과를 재생하고, 같은 키·다른 입력이나 처리 중 중복 호출은 409입니다. 실패한 키는 정제된 오류를 재생하므로 새 계산에는 새 키를 사용하세요. 피드백은 `{"userId":1,"helpful":true,"comment":"도움이 됐어요"}` 형식으로 최초 201·재제출 200이며, 소유자가 다르면 409입니다.
+
+VS Code REST Client로 전체 흐름을 수동 확인하려면 [requests/recommendation-v2.http](requests/recommendation-v2.http)의 변수(`userId`, `topicId`, 새 `idempotencyKey`)를 맞춘 뒤 위에서부터 실행하세요. Frontend는 Python 응답이 아니라 Backend recommendation response만 소비합니다.
 
 ## 요구 환경
 
@@ -111,7 +113,7 @@ WSL 주소는 재시작 후 바뀔 수 있으므로 매번 조회합니다. 이 
 | POSTGRES_HOST | localhost |
 | POSTGRES_PORT | 5432 |
 | SERVER_PORT | 8080 |
-| ML_MODE | `stub`(기본값)은 결정론적 프로필·추천 계산, `http`는 프로필 HTTP 계산만 지원 |
+| ML_MODE | `stub`(기본값)은 기존 결정론적 scalar 프로필·추천, `http`는 실제 ML 프로필과 prerequisite-first ranking-v2 사용 |
 | ML_BASE_URL | `http` 모드의 ML 서버 기준 URL. 기본값 `http://127.0.0.1:8000` |
 | ML_CONNECT_TIMEOUT | ML 연결 제한 시간. 기본값 `PT2S` |
 | ML_READ_TIMEOUT | ML 응답 제한 시간. 기본값 `PT10S` |
@@ -135,6 +137,12 @@ wsl -d Ubuntu -- bash ./gradlew clean build --no-daemon --console=plain
 ```
 
 테스트는 Testcontainers가 임시 PostgreSQL을 생성하므로 Compose DB나 `.env`가 필요 없습니다. **Docker가 없으면 실패하며 테스트를 건너뛰지 않습니다.** H2는 사용하지 않습니다. 테스트 종료 시 임시 컨테이너는 Testcontainers가 정리합니다.
+
+실행 중인 최신 ML `main`과의 opt-in profile/rank-v2 계약 테스트는 다음처럼 실행합니다.
+
+```bash
+ML_CONTRACT_BASE_URL=http://127.0.0.1:8000 ./gradlew test --tests '*LiveContract*'
+```
 
 결과: `build/reports/tests/test/index.html`, `build/test-results/test/`. 실행 JAR: `build/libs/backend-0.0.1-SNAPSHOT.jar`.
 

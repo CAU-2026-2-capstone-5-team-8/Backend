@@ -6,4 +6,8 @@ public interface MlGateway {
     default MlRankResult rankBooks(MlRankRequest request) {
         throw new MlGatewayException("ML_RANK_UNAVAILABLE", "ML 랭킹 계산을 사용할 수 없습니다.");
     }
+
+    default MlRankV2Result rankBooksV2(MlRankV2Request request) {
+        throw new MlGatewayException("ML_RANK_UNAVAILABLE", "ML 랭킹 v2 계산을 사용할 수 없습니다.");
+    }
 }

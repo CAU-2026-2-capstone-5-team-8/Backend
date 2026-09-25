@@ -7,6 +7,8 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.cau.capstone8.backend.assessment.MeasurementArea;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -138,10 +140,69 @@ class HttpMlGatewayTest {
                         .doesNotHaveBean(HttpMlGateway.class));
     }
 
-    @Test void reportsRankingUnavailableUntilHttpRankIsImplemented() {
-        assertThatThrownBy(() -> gateway.rankBooks(null))
+    @Test void postsExplicitRankV2WireFormatAndAcceptsShortage() {
+        server.stubFor(post("/ml/rank").willReturn(okJson(validRankV2Json())));
+
+        MlRankV2Result result = gateway.rankBooksV2(rankV2Request());
+
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.diagnostics().personalizedCandidateShortage()).isEqualTo(1);
+        server.verify(1, postRequestedFor(urlEqualTo("/ml/rank"))
+                .withRequestBody(matchingJsonPath("$.rankingModel",
+                        equalTo("rank-prerequisite-first-v2")))
+                .withRequestBody(matchingJsonPath("$.readerProfile.conceptReadiness[0].conceptId",
+                        equalTo("process")))
+                .withRequestBody(matchingJsonPath("$.candidateBooks[0].bookId",
+                        equalTo("isbn13:9780132199087")))
+                .withRequestBody(notContaining("challengeLevel"))
+                .withRequestBody(notContaining("requestId")));
+    }
+
+    @Test void mapsRankV2Target422WithoutExposingUpstreamBodyOrFallingBack() {
+        server.stubFor(post("/ml/rank").willReturn(aResponse().withStatus(422)
+                .withBody("secret non-personalizable details")));
+
+        assertThatThrownBy(() -> gateway.rankBooksV2(rankV2Request()))
                 .isInstanceOfSatisfying(MlGatewayException.class,
-                        ex -> assertThat(ex.getFailureCode()).isEqualTo("ML_RANK_UNAVAILABLE"));
+                        ex -> assertThat(ex.getFailureCode()).isEqualTo("ML_RANK_TARGET_UNAVAILABLE"))
+                .hasMessageNotContaining("secret");
+        server.verify(1, postRequestedFor(urlEqualTo("/ml/rank")));
+    }
+
+    @Test void rejectsMalformedRankV2Response() {
+        server.stubFor(post("/ml/rank").willReturn(okJson(
+                validRankV2Json().replace("\"prerequisiteCoverage\":0.5",
+                        "\"prerequisiteCoverage\":0.75"))));
+        assertThatThrownBy(() -> gateway.rankBooksV2(rankV2Request()))
+                .isInstanceOfSatisfying(MlGatewayException.class,
+                        ex -> assertThat(ex.getFailureCode()).isEqualTo("ML_INVALID_RESPONSE"));
+    }
+
+    @ParameterizedTest @ValueSource(ints = {400, 429, 500, 503})
+    void rejectsRankV2HttpErrorsWithoutRetryOrFallback(int status) {
+        server.stubFor(post("/ml/rank").willReturn(aResponse().withStatus(status)
+                .withBody("secret rank detail")));
+        assertThatThrownBy(() -> gateway.rankBooksV2(rankV2Request()))
+                .isInstanceOfSatisfying(MlGatewayException.class,
+                        ex -> assertThat(ex.getFailureCode()).isEqualTo("ML_UPSTREAM_ERROR"))
+                .hasMessageNotContaining("secret");
+        server.verify(1, postRequestedFor(urlEqualTo("/ml/rank")));
+    }
+
+    @Test void timesOutRankV2WithoutRetryOrFallback() {
+        gateway = new HttpMlGateway(baseUrl, Duration.ofSeconds(2), Duration.ofMillis(100));
+        server.stubFor(post("/ml/rank").willReturn(okJson(validRankV2Json()).withFixedDelay(1000)));
+        assertThatThrownBy(() -> gateway.rankBooksV2(rankV2Request()))
+                .isInstanceOfSatisfying(MlGatewayException.class,
+                        ex -> assertThat(ex.getFailureCode()).isEqualTo("ML_TIMEOUT"));
+        server.verify(1, postRequestedFor(urlEqualTo("/ml/rank")));
+    }
+
+    @Test void reportsRankV2ConnectionFailureWithoutFallback() {
+        server.stop();
+        assertThatThrownBy(() -> gateway.rankBooksV2(rankV2Request()))
+                .isInstanceOfSatisfying(MlGatewayException.class,
+                        ex -> assertThat(ex.getFailureCode()).isEqualTo("ML_UNAVAILABLE"));
     }
 
     void assertFailure(String code) {
@@ -149,5 +210,47 @@ class HttpMlGatewayTest {
                 .isInstanceOfSatisfying(MlGatewayException.class,
                         ex -> assertThat(ex.getFailureCode()).isEqualTo(code))
                 .hasMessageNotContaining("secret").hasMessageNotContaining(baseUrl);
+    }
+
+    MlRankV2Request rankV2Request() {
+        String hash = "sha256:6230d12facf94e46c1daa11d9d83b3929322af2f69a36614d3f553684bfb21d6";
+        return new MlRankV2Request(UUID.randomUUID(), 1,
+                new MlRankV2Request.Reader("operating-systems", 0.8, 0.7, 0.9,
+                        List.of(new MlRankV2Request.ConceptReadiness("process", 0.8)),
+                        "reader-v1", "reader-config-v1", hash),
+                List.of(
+                        new MlRankV2Request.Candidate(1, 10, "isbn13:9780132199087",
+                                Map.of("operating-systems", 1.0),
+                                List.of(new MlRankV2Request.Concept("process", 1.0)), List.of(),
+                                null, null, null, null, "book-v1", "features-v1", hash),
+                        new MlRankV2Request.Candidate(2, 11, "isbn13:9780201498387",
+                                Map.of("operating-systems", 1.0),
+                                List.of(), List.of(), null, null, null, null,
+                                "book-v1", "features-v1", hash)),
+                null, 2);
+    }
+
+    String validRankV2Json() {
+        String hash = "sha256:6230d12facf94e46c1daa11d9d83b3929322af2f69a36614d3f553684bfb21d6";
+        return ("""
+                {"userId":1,"topicId":"operating-systems","items":[{
+                  "bookId":"isbn13:9780132199087","rank":1,"availabilityStatus":"personalizable",
+                  "prerequisiteReadiness":0.8,"prerequisiteAssessedCount":1,
+                  "prerequisiteTotalCount":2,"prerequisiteCoverage":0.5,
+                  "directLearningOpportunity":0.2,"directAssessedCount":1,
+                  "directTotalCount":1,"directCoverage":1.0,"coveredConcepts":["process"],
+                  "inferredPrerequisites":["concurrency","thread"],
+                  "reasons":["근거 1","근거 2"],"modelVersion":"rank-prerequisite-first-v2",
+                  "bookFeatureVersion":"book-v1","bookConfigVersion":"features-v1",
+                  "bookConfigHash":"%s"}],
+                 "diagnostics":{"requestedLimit":2,"returnedCount":1,"topicCandidateCount":2,
+                   "personalizableCount":1,"conceptOnlyCount":0,"evidenceUnavailableCount":1,
+                   "fallbackCount":1,"personalizedCandidateShortage":1},
+                 "modelVersion":"rank-prerequisite-first-v2","configVersion":"ranking-v2-config-v1",
+                 "configHash":"%s","conceptGraphVersion":"concept-graph-v1",
+                 "conceptGraphHash":"%s","graphReviewVersion":"concept-graph-reviews-v1",
+                 "graphReviewHash":"%s","readerProfileVersion":"reader-v1",
+                 "readerConfigVersion":"reader-config-v1","readerConfigHash":"%s"}
+                """).formatted(hash, hash, hash, hash, hash).replaceAll("\\s+", "");
     }
 }
