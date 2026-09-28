@@ -1,4 +1,4 @@
-# 지금 구현된 것 설명 (2026-09-16 기준)
+# 지금 구현된 것 설명 (2026-09-28 기준)
 
 이 문서는 "지금 백엔드가 실제로 뭘 하는지"를 이해하기 위한 설명 문서다. 미래 계획은 [remaining-work-analysis.md](remaining-work-analysis.md), 전체 목표 계약은 [design.md](design.md) 참고.
 
@@ -9,7 +9,7 @@
 ```
 
 - **Spring Boot가 전부 담당한다.** API, 검증, DB 저장, 응답 생성까지 전부 Spring Boot 안에서 처리된다.
-- **Python ML 서비스와의 HTTP 통신은 아직 없다.** 대신 결정론적 `stub`이 영역별 자기평가 비율로 독자 프로필을 계산하고, 준비도와 활성 도서 특성으로 추천을 계산한다.
+- 기본값은 결정론적 `stub`이며 `ML_MODE=http`에서는 Python ML의 `/ml/reader-profile`과 prerequisite-first rank-v2 `/ml/rank`를 호출한다. HTTP 실패를 stub 성공으로 자동 전환하지 않는다.
 - **인증이 없다.** 로그인 없이 `userId`를 그냥 요청 값으로 받는다. 실제 서비스가 아니라 프로토타입이기 때문.
 - 코드는 기능별 폴더로 나뉜다: `topic`(분야), `book`(도서), `assessment`(진단), `profile`(독자 프로필), `recommendation`(추천·피드백), `integration.ml`(계산 경계), `user`(사용자), `common.error`(에러 처리 공통)
 
@@ -65,7 +65,7 @@ Body: { "userId": 1, "topicId": 2 }
 5. 뽑은 9문항을 `assessment_question` 테이블에 "스냅샷"으로 복사해서 저장한다 — 나중에 원본 문제가 수정돼도 이 세션에서 실제로 보여준 문제 내용은 그대로 보존된다는 뜻
 6. 응답으로 세션 정보 + 9문항을 돌려준다
 
-**문항 형식(2026-09-14 변경)**: 4지선다 객관식이 아니라 **"안다/모른다" 자기평가** 방식으로 바뀌었다. 그래서 문항에 보기(options)나 정답이 아예 없다 — 채점 대상이 아니라 사용자가 스스로 아는지 표시하는 방식이기 때문이다. 교수님 면담에서 나온 "시험처럼 느껴지면 피로도가 높아 접근성이 떨어진다"는 의견을 반영해 팀이 합의한 방향이다 (비교 근거는 [문항 방식 비교](<assessment-format-comparison(문제 선다 방식).md>)).
+**문항 형식**: 기존 demo 문항은 **"안다/모른다" 자기평가**를 유지한다. 여기에 Question-Generation의 `GeneratedQuestion`과 matching `HumanQuestionReview(approve)`를 명시적으로 import한 4지선다 문항을 함께 지원한다. `answerMode`가 `SELF_REPORT` 또는 `MULTIPLE_CHOICE`로 두 의미를 구분한다. 생성 문항은 stem·choices·answer key·explanation·provenance를 발급 시점에 snapshot하지만, client 응답에는 choices만 보내고 answer key와 explanation은 보내지 않는다. 상세 경계는 [생성 문항 handoff 계약](generated-question-handoff-v1.md)을 참고한다.
 
 응답 예시:
 
@@ -81,7 +81,11 @@ Body: { "userId": 1, "topicId": 2 }
       "orderIndex": 0,
       "measurementArea": "VOCABULARY",
       "conceptId": "deadlock",
-      "prompt": "\"교착 상태(deadlock)\"라는 용어의 뜻을 알고 있습니까?"
+      "prompt": "\"교착 상태(deadlock)\"라는 용어의 뜻을 알고 있습니까?",
+      "answerMode": "SELF_REPORT",
+      "choices": [],
+      "knowsConcept": null,
+      "selectedChoiceIndex": null
     }
   ]
 }
@@ -93,7 +97,7 @@ Body: { "userId": 1, "topicId": 2 }
 GET /api/assessments/{sessionId}
 ```
 
-세션 상태, 9문항(측정 영역과 `conceptId` 포함), 문항별로 이미 저장된 답변(`knowsConcept`, 아직 답 안 했으면 `null`)을 반환한다. 존재하지 않는 sessionId면 404.
+세션 상태, 9문항(측정 영역, `conceptId`, answer mode 포함), 문항별로 이미 저장된 mode별 답변을 반환한다. self-report는 `knowsConcept`, 객관식은 `selectedChoiceIndex`이고 미응답은 `null`이다. 존재하지 않는 sessionId면 404.
 
 ### 2-6. 진단 답변 저장
 
@@ -101,6 +105,8 @@ GET /api/assessments/{sessionId}
 PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}
 Body: { "knowsConcept": true }
 ```
+
+객관식 문항은 `{"selectedChoiceIndex":2}`를 보낸다. 둘을 함께 보내거나 mode와 맞지 않는 field, 범위 밖 index, client가 만든 `correct` field는 400이다. 객관식 correctness는 Backend가 snapshot answer key와 비교해 계산·저장한다.
 
 1. `sessionId`가 없으면 404, `assessmentQuestionId`가 그 세션 소속이 아니면 404
 2. 세션이 `PROCESSING`/`COMPLETED` 상태면 409 (더 이상 답변 수정 불가)
@@ -116,7 +122,7 @@ POST /api/assessments/{sessionId}/complete
 
 1. 세션을 잠그고 발급한 9문항에 답변이 모두 있는지 확인한다. 부족하면 409를 반환한다.
 2. UUID `attemptId`와 기본 30초 처리 임대를 저장한 뒤 트랜잭션을 끝낸다.
-3. DB 트랜잭션 밖에서 `MlGateway`를 호출한다. 현재 기본 `stub`은 측정 영역별 `안다 수 / 3`을 `[0,1]` 점수로 계산한다.
+3. DB 트랜잭션 밖에서 `MlGateway`를 호출한다. legacy 문항은 기존 `knowsConcept`, 객관식은 서버가 계산한 correctness를 ML `correct`로 전달한다. 현재 기본 `stub`은 측정 영역별 positive/correct 응답 비율을 `[0,1]` 점수로 계산한다.
 4. 다시 세션을 잠그고 같은 attempt가 여전히 소유자인지 확인한 뒤 `reader_profile` 저장과 `COMPLETED` 전이를 한 트랜잭션으로 처리한다.
 5. 같은 완료 요청을 다시 보내면 새 계산 없이 저장된 프로필을 200으로 반환한다. 진행 중인 중복 요청은 409이며, 만료된 attempt는 새 요청이 교체할 수 있다.
 6. 계산 실패 시 외부 상세를 응답이나 DB에 남기지 않고 정제된 실패 코드·메시지만 저장한 뒤 `IN_PROGRESS`로 복구한다.
@@ -169,10 +175,10 @@ Content-Type: application/json
 | `app_user` | 데이터 있음 | 데모 사용자 1명 (demo 프로필 실행 시) |
 | `topic` | 데이터 있음 | CS, OS 2개 (데모) |
 | `book`, `book_topic`, `book_sample`, `book_feature` | 데이터 있음 | 합성 도서 5권 (실제 출판물 아님) |
-| `question` | 데이터 있음 | OS 분야 9문항 (데모) |
+| `question` | 데이터 있음 | OS self-report demo 9문항 + 명시적으로 import한 approved generated question |
 | `assessment_session` | 호출 시 저장 | `POST /api/assessments` 호출할 때마다 |
-| `assessment_question` | 호출 시 저장 | 세션당 9행, 영역·문구·버전·난이도 스냅샷 |
-| `assessment_answer` | 호출 시 저장 | `PUT .../answers/...` 호출할 때마다 |
+| `assessment_question` | 호출 시 저장 | 세션당 9행, mode·본문·choices·채점 기준·provenance 스냅샷 |
+| `assessment_answer` | 호출 시 저장 | mode별 `knows_concept` 또는 selected index + server-calculated correctness |
 | `reader_profile` | 완료 시 저장 | 세션당 최대 1행, 점수 3종·계산 버전·근거 JSON |
 | `recommendation_run` | 추천 생성 시 저장 | 멱등성 키, 입력·후보 스냅샷, 상태·처리 임대, 후보 제외 개수 |
 | `recommendation_item` | 성공 시 저장 | 도서·특성 버전·각 점수·이유; run 내 도서와 순위 각각 유일 |
@@ -180,9 +186,9 @@ Content-Type: application/json
 
 ## 4. 아직 안 되는 것 (자주 헷갈리는 부분 정리)
 
-- ❌ 실제 Python ML 서버와 HTTP 통신 (`stub` 계산만 구현됨)
 - ❌ Data-Pipeline의 실제 도서 10권 자동 적재 (현재 합성 데모 도서 5권)
 - ❌ 로그인/인증 (userId를 그냥 숫자로 보냄)
+- ❌ generated-only Linear Algebra full assessment (현재 approved bank에 comprehension 문항이 없어 기존 3영역·9문항 정책을 충족하지 못함)
 
 ## 5. 직접 실행해서 확인하는 법
 
