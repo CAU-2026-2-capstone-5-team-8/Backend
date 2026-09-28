@@ -121,11 +121,13 @@ public class AssessmentCompletionService {
         session.beginProcessing(attemptId, now.plus(processingLease));
         List<MlProfileRequest.Answer> mlAnswers = issued.stream()
                 .map(question -> new MlProfileRequest.Answer(
-                        question.getId().toString(),
+                        question.getGeneratedQuestionIdSnapshot() == null
+                                ? question.getId().toString()
+                                : question.getGeneratedQuestionIdSnapshot(),
                         question.getMeasurementAreaSnapshot(),
                         question.getConceptIdSnapshot(),
                         question.getDifficultySnapshot(),
-                        answerByQuestion.get(question.getId()).isKnowsConcept(),
+                        answerByQuestion.get(question.getId()).resultForMl(),
                         1.0))
                 .toList();
         MlProfileRequest request = new MlProfileRequest(

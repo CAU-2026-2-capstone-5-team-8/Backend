@@ -44,7 +44,7 @@ public record MlProfileRequest(
             MeasurementArea measurementArea,
             String conceptId,
             int difficulty,
-            boolean knowsConcept,
+            boolean correct,
             double points) {
 
         public Answer {

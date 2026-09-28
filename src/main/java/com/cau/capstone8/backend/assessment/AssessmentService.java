@@ -51,7 +51,10 @@ public class AssessmentService {
             Question q = sampled.get(i);
             issued.add(new AssessmentQuestion(
                     session.getId(), q.getId(), i, q.getMeasurementArea(),
-                    q.getPrompt(), q.getConceptId(), q.getVersion(), q.getDifficulty()));
+                    q.getPrompt(), q.getConceptId(), q.getVersion(), q.getDifficulty(),
+                    q.getAnswerMode(), q.getGeneratedQuestionId(), q.getQuestionSpecId(),
+                    q.getChoices(), q.getCorrectChoiceIndex(), q.getExplanation(),
+                    q.getGeneratedContentHash(), q.getUpstreamProvenance()));
         }
         assessmentQuestions.saveAll(issued);
 
@@ -62,14 +65,17 @@ public class AssessmentService {
         AssessmentSession session = sessions.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("진단 세션을 찾을 수 없습니다."));
         List<AssessmentQuestion> issued = assessmentQuestions.findBySessionIdOrderByOrderIndex(sessionId);
-        Map<Long, Boolean> knownByQuestionId = answers
+        Map<Long, AssessmentAnswer> answerByQuestionId = answers
                 .findByAssessmentQuestionIdIn(issued.stream().map(AssessmentQuestion::getId).toList()).stream()
-                .collect(Collectors.toMap(AssessmentAnswer::getAssessmentQuestionId, AssessmentAnswer::isKnowsConcept));
-        return toResponse(session, issued, knownByQuestionId);
+                .collect(Collectors.toMap(AssessmentAnswer::getAssessmentQuestionId, answer -> answer));
+        return toResponse(session, issued, answerByQuestionId);
     }
 
     @Transactional
-    public AssessmentResponse.IssuedQuestion answer(long sessionId, long assessmentQuestionId, boolean knowsConcept) {
+    public AssessmentResponse.IssuedQuestion answer(
+            long sessionId,
+            long assessmentQuestionId,
+            AssessmentAnswerRequest request) {
         // Lock the session row so a concurrent answer write or completion can't race this update (design.md).
         AssessmentSession session = sessions.findByIdForUpdate(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("진단 세션을 찾을 수 없습니다."));
@@ -84,26 +90,62 @@ public class AssessmentService {
             session.setStatus(AssessmentStatus.IN_PROGRESS);
         }
 
-        var existing = answers.findByAssessmentQuestionId(assessmentQuestionId);
-        if (existing.isPresent()) {
-            existing.get().setKnowsConcept(knowsConcept);
-        } else {
-            answers.save(new AssessmentAnswer(assessmentQuestionId, knowsConcept));
-        }
+        AssessmentAnswer saved = saveAnswer(question, request);
 
-        return new AssessmentResponse.IssuedQuestion(question.getId(), question.getOrderIndex(),
-                question.getMeasurementAreaSnapshot().name(), question.getConceptIdSnapshot(),
-                question.getPromptSnapshot(), knowsConcept);
+        return toIssuedQuestion(question, saved);
     }
 
     private AssessmentResponse toResponse(AssessmentSession session, List<AssessmentQuestion> issued,
-                                           Map<Long, Boolean> knownByQuestionId) {
+                                           Map<Long, AssessmentAnswer> answerByQuestionId) {
         List<AssessmentResponse.IssuedQuestion> issuedQuestions = issued.stream()
-                .map(q -> new AssessmentResponse.IssuedQuestion(q.getId(), q.getOrderIndex(),
-                        q.getMeasurementAreaSnapshot().name(), q.getConceptIdSnapshot(), q.getPromptSnapshot(),
-                        knownByQuestionId.get(q.getId())))
+                .map(question -> toIssuedQuestion(question, answerByQuestionId.get(question.getId())))
                 .toList();
         return new AssessmentResponse(session.getId(), session.getUserId(), session.getTopicId(),
                 session.getStatus().name(), issuedQuestions);
+    }
+
+    private AssessmentAnswer saveAnswer(
+            AssessmentQuestion question,
+            AssessmentAnswerRequest request) {
+        var existing = answers.findByAssessmentQuestionId(question.getId());
+        if (question.getAnswerModeSnapshot() == AnswerMode.SELF_REPORT) {
+            if (request.getKnowsConcept() == null || request.getSelectedChoiceIndex() != null) {
+                throw new InvalidAssessmentAnswerException("자기평가 문항에는 knowsConcept 답변이 필요합니다.");
+            }
+            if (existing.isPresent()) {
+                existing.get().updateSelfReport(request.getKnowsConcept());
+                return existing.get();
+            }
+            return answers.save(AssessmentAnswer.selfReport(
+                    question.getId(), request.getKnowsConcept()));
+        }
+
+        if (request.getSelectedChoiceIndex() == null || request.getKnowsConcept() != null) {
+            throw new InvalidAssessmentAnswerException("객관식 문항에는 selectedChoiceIndex 답변이 필요합니다.");
+        }
+        int selectedIndex = request.getSelectedChoiceIndex();
+        boolean correct = selectedIndex == question.getCorrectChoiceIndexSnapshot();
+        if (existing.isPresent()) {
+            existing.get().updateMultipleChoice(selectedIndex, correct);
+            return existing.get();
+        }
+        return answers.save(AssessmentAnswer.multipleChoice(question.getId(), selectedIndex, correct));
+    }
+
+    private AssessmentResponse.IssuedQuestion toIssuedQuestion(
+            AssessmentQuestion question,
+            AssessmentAnswer answer) {
+        List<String> choices = question.getChoicesSnapshot() == null
+                ? List.of() : question.getChoicesSnapshot();
+        return new AssessmentResponse.IssuedQuestion(
+                question.getId(),
+                question.getOrderIndex(),
+                question.getMeasurementAreaSnapshot().name(),
+                question.getConceptIdSnapshot(),
+                question.getPromptSnapshot(),
+                question.getAnswerModeSnapshot().name(),
+                choices,
+                answer == null ? null : answer.getKnowsConcept(),
+                answer == null ? null : answer.getSelectedChoiceIndex());
     }
 }

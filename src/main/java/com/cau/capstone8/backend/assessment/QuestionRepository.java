@@ -1,6 +1,7 @@
 package com.cau.capstone8.backend.assessment;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
@@ -20,4 +21,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> sampleActiveByTopic(@Param("topicId") long topicId, @Param("perArea") int perArea);
 
     long countByTopicIdAndActiveTrue(long topicId);
+
+    Optional<Question> findByGeneratedQuestionId(String generatedQuestionId);
 }

@@ -24,7 +24,7 @@ public class StubMlGateway implements MlGateway {
         }
         for (MlProfileRequest.Answer answer : request.answers()) {
             totals.compute(answer.measurementArea(), (ignored, count) -> count + 1);
-            if (answer.knowsConcept()) {
+            if (answer.correct()) {
                 known.compute(answer.measurementArea(), (ignored, count) -> count + 1);
             }
         }
