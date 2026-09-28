@@ -39,13 +39,18 @@ class AssessmentCreationIntegrationTest {
         for (var q : questions) {
             assertThat(q.path("prompt").asString()).isNotBlank();
             assertThat(q.path("conceptId").asString()).isNotBlank();
+            assertThat(q.path("answerMode").asString()).isEqualTo("SELF_REPORT");
+            assertThat(q.path("choices").isArray()).isTrue();
+            assertThat(q.path("choices").isEmpty()).isTrue();
+            assertThat(q.path("selectedChoiceIndex").isNull()).isTrue();
             String area = q.path("measurementArea").asString();
             assertThat(area).isIn("VOCABULARY", "BACKGROUND_KNOWLEDGE", "COMPREHENSION");
             areaCounts.merge(area, 1, Integer::sum);
         }
         assertThat(areaCounts).containsExactlyInAnyOrderEntriesOf(
                 java.util.Map.of("VOCABULARY", 3, "BACKGROUND_KNOWLEDGE", 3, "COMPREHENSION", 3));
-        assertThat(response.body()).doesNotContain("correctOptionId", "answerKey", "options");
+        assertThat(response.body()).doesNotContain(
+                "correctOptionId", "correctChoiceIndex", "correct", "explanation", "answerKey", "options");
     }
 
     @Test void rejectsUnknownUserOrTopic() throws Exception {
@@ -95,6 +100,7 @@ class AssessmentCreationIntegrationTest {
         var body = json.readTree(response.body());
         assertThat(body.path("id").asLong()).isEqualTo(questionId);
         assertThat(body.path("knowsConcept").asBoolean()).isTrue();
+        assertThat(body.path("selectedChoiceIndex").isNull()).isTrue();
         assertThat(body.path("conceptId").asString()).isNotBlank();
 
         var reloaded = json.readTree(get(sessionId).body());

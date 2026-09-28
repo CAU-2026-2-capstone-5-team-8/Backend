@@ -68,6 +68,69 @@ class AssessmentSessionSchemaIntegrationTest {
                 + "from backend.question where id=" + question);
     }
 
+    @Test void rejectsInvalidGeneratedQuestionShapeAndDuplicateUpstreamId() {
+        long topic = jdbc.queryForObject(
+                "select id from backend.topic where code='OS'", Long.class);
+        String generatedQuestionId = "gq_dddddddddddddddddddddddddddddddd";
+        jdbc.queryForObject("""
+                insert into backend.question(
+                    topic_id, measurement_area, difficulty, prompt, concept_id, version, active,
+                    answer_mode, generated_question_id, question_spec_id, choices,
+                    correct_choice_index, explanation, generated_content_hash, upstream_provenance)
+                values (?, 'VOCABULARY', 1, 'valid generated prompt', 'process',
+                        'generated-question-v2', true, 'MULTIPLE_CHOICE', ?,
+                        'q_dddddddddddddddddddd', '["a","b","c","d"]'::jsonb,
+                        0, 'valid explanation',
+                        'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+                        '{}'::jsonb)
+                returning id
+                """, Long.class, topic, generatedQuestionId);
+
+        rejectsWrite(() -> jdbc.update("""
+                insert into backend.question(
+                    topic_id, measurement_area, difficulty, prompt, concept_id, version, active,
+                    answer_mode, generated_question_id, question_spec_id, choices,
+                    correct_choice_index, explanation, generated_content_hash, upstream_provenance)
+                values (?, 'VOCABULARY', 1, 'duplicate generated prompt', 'process',
+                        'generated-question-v2', true, 'MULTIPLE_CHOICE', ?,
+                        'q_eeeeeeeeeeeeeeeeeeee', '["a","b","c","d"]'::jsonb,
+                        0, 'valid explanation',
+                        'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+                        '{}'::jsonb)
+                """, topic, generatedQuestionId));
+        rejectsWrite(() -> jdbc.update("""
+                insert into backend.question(
+                    topic_id, measurement_area, difficulty, prompt, concept_id, version, active,
+                    answer_mode, generated_question_id, question_spec_id, choices,
+                    correct_choice_index, explanation, generated_content_hash, upstream_provenance)
+                values (?, 'VOCABULARY', 1, 'invalid generated prompt', 'process',
+                        'generated-question-v2', true, 'MULTIPLE_CHOICE',
+                        'gq_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+                        'q_eeeeeeeeeeeeeeeeeeee', '["a","b","c","d"]'::jsonb,
+                        4, 'valid explanation',
+                        'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+                        '{}'::jsonb)
+                """, topic));
+    }
+
+    @Test void rejectsAnswerPayloadShapeThatDoesNotMatchAnswerMode() {
+        long session = newSession();
+        long assessmentQuestion = issue(session, questionId("os-vocab-1"), 0);
+
+        rejectsWrite(() -> jdbc.update("""
+                insert into backend.assessment_answer(
+                    assessment_question_id, answer_mode, knows_concept,
+                    selected_choice_index, correct)
+                values (?, 'MULTIPLE_CHOICE', true, 0, true)
+                """, assessmentQuestion));
+        rejectsWrite(() -> jdbc.update("""
+                insert into backend.assessment_answer(
+                    assessment_question_id, answer_mode, knows_concept,
+                    selected_choice_index, correct)
+                values (?, 'MULTIPLE_CHOICE', null, 4, false)
+                """, assessmentQuestion));
+    }
+
     @Test void processingStatusRequiresAttemptAndLeaseAndOtherStatusesRejectThem() {
         long withoutOwnership = newSession();
         rejects("update backend.assessment_session set status='PROCESSING' where id=" + withoutOwnership);
@@ -135,5 +198,12 @@ class AssessmentSessionSchemaIntegrationTest {
     void rejects(String sql) {
         assertThatThrownBy(() -> new TransactionTemplate(transactions).execute(status -> { jdbc.execute(sql); return null; }))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    void rejectsWrite(Runnable write) {
+        assertThatThrownBy(() -> new TransactionTemplate(transactions).execute(status -> {
+            write.run();
+            return null;
+        })).isInstanceOf(DataIntegrityViolationException.class);
     }
 }

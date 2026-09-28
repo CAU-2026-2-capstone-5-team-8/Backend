@@ -30,7 +30,7 @@ public class AssessmentController {
     public AssessmentResponse.IssuedQuestion answer(@PathVariable @Positive long sessionId,
                                                       @PathVariable @Positive long assessmentQuestionId,
                                                       @RequestBody @Valid AssessmentAnswerRequest request) {
-        return service.answer(sessionId, assessmentQuestionId, request.knowsConcept());
+        return service.answer(sessionId, assessmentQuestionId, request);
     }
 
     @PostMapping("/{sessionId}/complete")

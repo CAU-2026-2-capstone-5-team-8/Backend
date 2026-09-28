@@ -1,0 +1,52 @@
+{
+  "generated_question_id": "gq_99d2b731a84d35c35ca56650b372d5f2",
+  "generated_question_version": "generated-question-v2",
+  "question_spec_id": "q_98d90188c8c61d2d0ff1",
+  "topic_id": "operating-systems",
+  "question_type": "vocabulary",
+  "cognitive_operation": "recognize",
+  "primary_concept": "process",
+  "related_concepts": [],
+  "prerequisite_concepts": [],
+  "target_difficulty": 1,
+  "difficulty_rationale": "Level 1: identify the primary term directly, without a relation step.",
+  "evidence_summary": "covered concept in 5/5 topic books; evidence types: description, introduction, preface, sample_chapter, toc",
+  "stem": "운영체제(operating system)에서 실행 중인 프로그램을 의미하며, 자원을 할당받는 기본 단위가 되는 개념은 무엇인가?",
+  "choices": [
+    "프로세스(process)",
+    "파일 시스템(file system)",
+    "디바이스 드라이버(device driver)",
+    "인터럽트 벡터(interrupt vector)"
+  ],
+  "correct_choice_index": 0,
+  "explanation": "프로세스(process)는 실행 중인 프로그램을 뜻하며, 운영체제에서 CPU 시간, 메모리 등의 시스템 자원을 할당받아 작업이 수행되는 기본 단위를 의미합니다.",
+  "generation_model": "gemini-3.5-flash-lite",
+  "output_language": "ko-KR",
+  "prompt_version": "question-generation-prompt-v2",
+  "generation_config_version": "gemini-generation-config-v2",
+  "question_spec_version": "question-spec-v1",
+  "question_spec_config_version": "assessment-config-v2-reviewed",
+  "question_spec_config_hash": "sha256:3d94b26001746192b43e227253746e77e9c1d3ccd17f5871b1c87e61779b6d77",
+  "supporting_book_ids": [
+    "book_21ac29d979effd89fad2",
+    "book_28fad378fb6e900626f2",
+    "book_7d22aef622717f0ad24b",
+    "isbn13:9780130319999",
+    "isbn13:9781985086593"
+  ],
+  "supporting_evidence_ids": [
+    "doc_9aa92dacdaed0c9c738c",
+    "toc_00954f9fac11368bd35d",
+    "toc_85701d19d3dfd27fea12",
+    "toc_af95ed45a3159362efc3",
+    "toc_e11e41de8f8892b535c3",
+    "toc_e407fe92264272e6441c"
+  ],
+  "source_document_ids": [],
+  "input_artifact_hash": "sha256:6327776e39ded1276e780d81156105e578c279bdfcdc3d2a16b428720f176510",
+  "usage": {
+    "input_tokens": 1231,
+    "output_tokens": 244,
+    "total_tokens": 1475
+  }
+}

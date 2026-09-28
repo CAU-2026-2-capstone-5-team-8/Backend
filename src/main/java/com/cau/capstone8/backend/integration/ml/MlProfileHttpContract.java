@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 import tools.jackson.core.type.TypeReference;
@@ -78,7 +77,7 @@ final class MlProfileHttpContract {
                         answer.conceptId(),
                         questionType(answer.measurementArea()),
                         difficultyBand(answer.difficulty()),
-                        answer.knowsConcept()))
+                        answer.correct()))
                 .toList();
         return new ProfileRequest(
                 request.userId(), request.assessmentId(), request.topicId(), responses);
@@ -95,7 +94,7 @@ final class MlProfileHttpContract {
     }
 
     static String questionType(MeasurementArea area) {
-        return area.name().toLowerCase(Locale.ROOT);
+        return area.toQuestionType();
     }
 
     /** Translate a decoded response, throwing IllegalArgumentException on any contract mismatch. */
@@ -124,8 +123,7 @@ final class MlProfileHttpContract {
             if (detail == null || detail.questionType() == null || detail.responseCount() == null) {
                 throw new IllegalArgumentException("ML profile dimension detail is incomplete");
             }
-            MeasurementArea area = MeasurementArea.valueOf(
-                    detail.questionType().toUpperCase(Locale.ROOT));
+            MeasurementArea area = MeasurementArea.fromQuestionType(detail.questionType());
             if (dimensionCounts.put(area, detail.responseCount()) != null) {
                 throw new IllegalArgumentException("duplicate ML profile dimension");
             }

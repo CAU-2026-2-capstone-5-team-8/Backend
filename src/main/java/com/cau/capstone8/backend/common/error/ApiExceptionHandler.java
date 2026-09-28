@@ -1,6 +1,7 @@
 package com.cau.capstone8.backend.common.error;
 
 import com.cau.capstone8.backend.assessment.AssessmentStateConflictException;
+import com.cau.capstone8.backend.assessment.InvalidAssessmentAnswerException;
 import com.cau.capstone8.backend.assessment.QuestionBankUnavailableException;
 import com.cau.capstone8.backend.integration.ml.MlGatewayException;
 import com.cau.capstone8.backend.recommendation.RecommendationConflictException;
@@ -32,6 +33,10 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AssessmentStateConflictException.class)
     ResponseEntity<ApiError> assessmentStateConflict(AssessmentStateConflictException ex) {
         return error(409, "ASSESSMENT_STATE_CONFLICT", ex.getMessage());
+    }
+    @ExceptionHandler(InvalidAssessmentAnswerException.class)
+    ResponseEntity<ApiError> invalidAssessmentAnswer(InvalidAssessmentAnswerException ex) {
+        return error(400, "INVALID_ASSESSMENT_ANSWER", ex.getMessage());
     }
     @ExceptionHandler(MlGatewayException.class)
     ResponseEntity<ApiError> mlGateway(MlGatewayException ex) {
