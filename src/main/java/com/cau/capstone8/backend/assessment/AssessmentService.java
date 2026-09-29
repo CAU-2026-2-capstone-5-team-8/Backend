@@ -51,7 +51,7 @@ public class AssessmentService {
             Question q = sampled.get(i);
             issued.add(new AssessmentQuestion(
                     session.getId(), q.getId(), i, q.getMeasurementArea(),
-                    q.getPrompt(), q.getConceptId(), q.getVersion(), q.getDifficulty(),
+                    q.getPassage(), q.getPrompt(), q.getConceptId(), q.getVersion(), q.getDifficulty(),
                     q.getAnswerMode(), q.getGeneratedQuestionId(), q.getQuestionSpecId(),
                     q.getChoices(), q.getCorrectChoiceIndex(), q.getExplanation(),
                     q.getGeneratedContentHash(), q.getUpstreamProvenance()));
@@ -142,6 +142,7 @@ public class AssessmentService {
                 question.getOrderIndex(),
                 question.getMeasurementAreaSnapshot().name(),
                 question.getConceptIdSnapshot(),
+                question.getPassageSnapshot(),
                 question.getPromptSnapshot(),
                 question.getAnswerModeSnapshot().name(),
                 choices,

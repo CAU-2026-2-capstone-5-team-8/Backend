@@ -161,6 +161,7 @@ class GeneratedQuestionAssessmentIntegrationTest {
     }
 
     private void assertSafeMultipleChoiceResponse(JsonNode question) {
+        assertThat(question.path("passage").isNull()).isTrue();
         assertThat(question.path("answerMode").asString()).isEqualTo("MULTIPLE_CHOICE");
         assertThat(question.path("choices").size()).isEqualTo(4);
         assertThat(question.has("correctChoiceIndex")).isFalse();
