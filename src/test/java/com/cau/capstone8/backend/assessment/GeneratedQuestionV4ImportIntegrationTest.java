@@ -33,6 +33,7 @@ class GeneratedQuestionV4ImportIntegrationTest {
             "fixtures/question-handoff/grounding-matrix-v2.json";
     private static final String REVISED_ID = "gq_66f3360464d1336ec1612715ebbdd3ed";
     private static final String FIRST_PASS_ID = "gq_c0e6f6c774e467bcb8ab2c10a4cd9379";
+    private static final String V2_ID = "gq_99d2b731a84d35c35ca56650b372d5f2";
     private static final String DISPLAY_HASH =
             "sha256:c5126e3650a7c2329f2a4281efc774465bb9954e19091808d7162938926850a4";
 
@@ -50,6 +51,10 @@ class GeneratedQuestionV4ImportIntegrationTest {
                 values ('LA-V4-TEST','Linear Algebra v4 contract','linear-algebra')
                 on conflict (code) do nothing
                 """);
+        jdbc.update("""
+                delete from backend.question
+                where generated_question_id in (?, ?)
+                """, REVISED_ID, V2_ID);
     }
 
     @Test
@@ -94,6 +99,9 @@ class GeneratedQuestionV4ImportIntegrationTest {
                 .containsEntry(
                         "generated_content_hash",
                         "sha256:30a3fe232e96d0fe3a2c57c8d77f47c57162323d8cca2e790b9e22a38a0dcf22")
+                .containsEntry(
+                        "explanation",
+                        "본문에 따르면 m×n 행렬은 m개의 행과 n개의 열을 가지며, 행의 수가 항상 먼저 기재되고 읽힐 때도 행의 수가 먼저 stated된다. 따라서 4개의 행과 3개의 열로 이루어진 수 배열은 4×3 행렬이며 '포-바이-스리(four-by-three)'라고 읽는다.")
                 .containsEntry("grounding_version", "generation-grounding-v2")
                 .containsEntry("display_hash", DISPLAY_HASH)
                 .containsEntry("provider", "hefferon")
@@ -179,7 +187,7 @@ class GeneratedQuestionV4ImportIntegrationTest {
         String grounding = fixture(GROUNDING);
 
         assertThat(importer.importApproved(v2, v2Review).generatedQuestionId())
-                .isEqualTo("gq_99d2b731a84d35c35ca56650b372d5f2");
+                .isEqualTo(V2_ID);
         assertThat(importer.importApproved(v4, reviews, grounding).generatedQuestionId())
                 .isEqualTo(REVISED_ID);
         assertRejected(
