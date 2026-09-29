@@ -8,6 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +37,14 @@ public class ApprovedQuestionImportService {
                     DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
             .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .build();
+    // grounding_path is optional per entry, so missing creator properties are allowed here.
+    private static final JsonMapper MANIFEST_JSON = JsonMapper.builder()
+            .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+            .enable(
+                    DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                    DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
             .build();
 
     private final QuestionRepository questions;
@@ -87,6 +97,68 @@ public class ApprovedQuestionImportService {
                 generatedQuestionJson,
                 reviewsJsonl,
                 groundingJson == null ? null : groundingJson.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Imports every entry listed in an explicit manifest in one transaction. Any rejected entry
+     * rolls back the whole batch. Relative paths resolve against the manifest's directory.
+     */
+    @Transactional
+    public List<ImportResult> importManifest(Path manifestPath) {
+        QuestionImportManifest manifest = parseManifest(manifestPath);
+        Path baseDirectory = manifestPath.toAbsolutePath().getParent();
+        var results = new ArrayList<ImportResult>();
+        for (int index = 0; index < manifest.entries().size(); index++) {
+            QuestionImportManifest.Entry entry = manifest.entries().get(index);
+            try {
+                results.add(importApproved(
+                        Files.readString(baseDirectory.resolve(entry.generatedPath())),
+                        Files.readString(baseDirectory.resolve(entry.reviewsPath())),
+                        entry.groundingPath() == null
+                                ? null
+                                : Files.readAllBytes(baseDirectory.resolve(entry.groundingPath()))));
+            } catch (IOException | QuestionImportException exception) {
+                throw new QuestionImportException(
+                        "manifest entry " + index + " (" + entry.generatedPath() + ") failed: "
+                                + exception.getMessage(),
+                        exception);
+            }
+        }
+        return List.copyOf(results);
+    }
+
+    private QuestionImportManifest parseManifest(Path manifestPath) {
+        QuestionImportManifest manifest;
+        try {
+            manifest = MANIFEST_JSON.readValue(
+                    Files.readAllBytes(manifestPath), QuestionImportManifest.class);
+        } catch (IOException | RuntimeException exception) {
+            throw new QuestionImportException("question import manifest is malformed", exception);
+        }
+        if (!QuestionImportManifest.VERSION.equals(manifest.manifestVersion())) {
+            throw new QuestionImportException(
+                    "manifest_version must be " + QuestionImportManifest.VERSION);
+        }
+        if (manifest.entries() == null || manifest.entries().isEmpty()) {
+            throw new QuestionImportException("manifest entries must not be empty");
+        }
+        var generatedPaths = new HashSet<String>();
+        for (QuestionImportManifest.Entry entry : manifest.entries()) {
+            if (entry == null || blank(entry.generatedPath()) || blank(entry.reviewsPath())
+                    || (entry.groundingPath() != null && entry.groundingPath().isBlank())) {
+                throw new QuestionImportException(
+                        "manifest entries require generated_path and reviews_path");
+            }
+            if (!generatedPaths.add(entry.generatedPath())) {
+                throw new QuestionImportException(
+                        "manifest lists generated_path more than once: " + entry.generatedPath());
+            }
+        }
+        return manifest;
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
     }
 
     private ImportResult importApproved(
