@@ -70,7 +70,8 @@ class ApprovedQuestionImportIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select generated_content_hash from backend.question where id=?",
                 String.class,
-                first.questionId())).matches("sha256:[0-9a-f]{64}");
+                first.questionId())).isEqualTo(
+                        "sha256:93054791477d930f9ed5c24296f93dbccdf1f50a4e72cb822b1385da96df4992");
 
         String changedStem = generated.replace(
                 "기본 단위가 되는 개념은 무엇인가?",

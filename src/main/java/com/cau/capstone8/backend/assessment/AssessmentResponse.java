@@ -8,6 +8,7 @@ public record AssessmentResponse(long id, long userId, long topicId, String stat
             int orderIndex,
             String measurementArea,
             String conceptId,
+            String passage,
             String prompt,
             String answerMode,
             List<String> choices,

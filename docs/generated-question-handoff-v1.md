@@ -1,5 +1,7 @@
 # Approved Generated Question handoff v1
 
+> 이 역사적 v2-only 계약은 [generated question handoff v2](generated-question-handoff-v2.md)에서 additive하게 확장되었다.
+
 이 문서는 ML의 `QuestionSpec`, Question-Generation의 `GeneratedQuestion`·`HumanQuestionReview`, Backend의 진단 lifecycle 사이 경계를 정의한다. Backend는 승인된 생성 문항을 제공하기 위한 저장·발급·채점 시스템이며 question generator가 아니다.
 
 ## 1. Repository별 책임

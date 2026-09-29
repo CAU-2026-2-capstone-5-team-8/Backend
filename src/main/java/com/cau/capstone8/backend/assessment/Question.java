@@ -14,6 +14,7 @@ public class Question {
     @Enumerated(EnumType.STRING)
     @Column(name = "measurement_area", nullable = false, length = 40) private MeasurementArea measurementArea;
     @Column(nullable = false) private int difficulty;
+    @Column(columnDefinition = "text") private String passage;
     @Column(nullable = false, columnDefinition = "text") private String prompt;
     @Column(name = "concept_id", length = 120) private String conceptId;
     @Column(nullable = false, length = 80) private String version;
@@ -37,6 +38,7 @@ public class Question {
             Long topicId,
             MeasurementArea measurementArea,
             int difficulty,
+            String passage,
             String prompt,
             String conceptId,
             String version,
@@ -51,6 +53,7 @@ public class Question {
         question.topicId = topicId;
         question.measurementArea = measurementArea;
         question.difficulty = difficulty;
+        question.passage = passage;
         question.prompt = prompt;
         question.conceptId = conceptId;
         question.version = version;
@@ -70,6 +73,7 @@ public class Question {
     public Long getTopicId() { return topicId; }
     public MeasurementArea getMeasurementArea() { return measurementArea; }
     public int getDifficulty() { return difficulty; }
+    public String getPassage() { return passage; }
     public String getPrompt() { return prompt; }
     public String getConceptId() { return conceptId; }
     public String getVersion() { return version; }

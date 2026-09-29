@@ -15,6 +15,7 @@ public class AssessmentQuestion {
     @Column(name = "order_index", nullable = false) private int orderIndex;
     @Enumerated(EnumType.STRING)
     @Column(name = "measurement_area_snapshot", nullable = false, length = 40) private MeasurementArea measurementAreaSnapshot;
+    @Column(name = "passage_snapshot", columnDefinition = "text") private String passageSnapshot;
     @Column(name = "prompt_snapshot", nullable = false, columnDefinition = "text") private String promptSnapshot;
     @Column(name = "concept_id_snapshot", length = 120) private String conceptIdSnapshot;
     @Column(name = "version_snapshot", nullable = false, length = 80) private String versionSnapshot;
@@ -38,7 +39,7 @@ public class AssessmentQuestion {
     protected AssessmentQuestion() {}
 
     public AssessmentQuestion(Long sessionId, Long questionId, int orderIndex, MeasurementArea measurementAreaSnapshot,
-                               String promptSnapshot, String conceptIdSnapshot, String versionSnapshot,
+                               String passageSnapshot, String promptSnapshot, String conceptIdSnapshot, String versionSnapshot,
                                int difficultySnapshot, AnswerMode answerModeSnapshot,
                                String generatedQuestionIdSnapshot, String questionSpecIdSnapshot,
                                List<String> choicesSnapshot, Integer correctChoiceIndexSnapshot,
@@ -48,6 +49,7 @@ public class AssessmentQuestion {
         this.questionId = questionId;
         this.orderIndex = orderIndex;
         this.measurementAreaSnapshot = measurementAreaSnapshot;
+        this.passageSnapshot = passageSnapshot;
         this.promptSnapshot = promptSnapshot;
         this.conceptIdSnapshot = conceptIdSnapshot;
         this.versionSnapshot = versionSnapshot;
@@ -68,6 +70,7 @@ public class AssessmentQuestion {
     public Long getQuestionId() { return questionId; }
     public int getOrderIndex() { return orderIndex; }
     public MeasurementArea getMeasurementAreaSnapshot() { return measurementAreaSnapshot; }
+    public String getPassageSnapshot() { return passageSnapshot; }
     public String getPromptSnapshot() { return promptSnapshot; }
     public String getConceptIdSnapshot() { return conceptIdSnapshot; }
     public String getVersionSnapshot() { return versionSnapshot; }
