@@ -82,6 +82,16 @@ class CatalogIntegrationTest {
         assertThat(get("/api/books/9223372036854775807").statusCode()).isEqualTo(404);
         assertThat(get("/api/books?topicId=9223372036854775807").statusCode()).isEqualTo(404);
     }
+    @Test void detailUsesMetadataCacheWhileListRemainsLive() throws Exception {
+        long id = jdbc.queryForObject("insert into backend.book(title,author,description) values('Before cache','Test author','Test description') returning id", Long.class);
+        try {
+            assertThat(ok("/api/books/" + id).path("title").asString()).isEqualTo("Before cache");
+            jdbc.update("update backend.book set title='After cache' where id=?", id);
+            assertThat(ok("/api/books/" + id).path("title").asString()).isEqualTo("Before cache");
+            var list = ok("/api/books?size=100").path("content");
+            assertThat(list.toString()).contains("After cache").doesNotContain("Before cache");
+        } finally { jdbc.update("delete from backend.book where id=?", id); }
+    }
     @Test void enforcesFeatureRangeUniquenessAndMembership() {
         long book = book();
         rejects("update backend.book_feature set vocabulary=1.01 where book_id=" + book);
