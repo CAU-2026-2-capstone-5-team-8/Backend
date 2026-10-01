@@ -174,6 +174,10 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 
 ## 협업과 다음 단계
 
+### 멘토링 반영: 도서 기본 정보 캐시
+
+도서 상세 조회의 제목·저자·설명·ISBN을 Caffeine으로 기본 5분, 최대 2,000권 캐시합니다. 분야 관계와 활성 feature 여부는 매번 DB에서 확인하며 목록·추천·개인 프로필은 캐시하지 않습니다. 404/DB 실패는 저장하지 않습니다. `CATALOG_METADATA_CACHE_ENABLED=false`로 비활성화할 수 있고 크기/TTL도 환경변수로 설정합니다. 기본 정보 수정·삭제는 TTL 동안 지연될 수 있습니다. [멘토링 점검 및 운영 설정](docs/mentor-followup-2026-10-02.md)을 참고하세요.
+
 main 직접 커밋 금지, 승인 없는 merge/force push 금지. 작은 기능 단위로 커밋하고 동시에 작업하는 팀원은 별도 기능 브랜치를 사용합니다.
 
 - [승인 설계](docs/design.md)
