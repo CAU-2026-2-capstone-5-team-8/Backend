@@ -1,4 +1,4 @@
-# 지금 구현된 것 설명 (2026-09-28 기준)
+# 지금 구현된 것 설명 (2026-10-02 기준)
 
 이 문서는 "지금 백엔드가 실제로 뭘 하는지"를 이해하기 위한 설명 문서다. 미래 계획은 [remaining-work-analysis.md](remaining-work-analysis.md), 전체 목표 계약은 [design.md](design.md) 참고.
 
@@ -13,7 +13,12 @@
 - **인증이 없다.** 로그인 없이 `userId`를 그냥 요청 값으로 받는다. 실제 서비스가 아니라 프로토타입이기 때문.
 - 코드는 기능별 폴더로 나뉜다: `topic`(분야), `book`(도서), `assessment`(진단), `profile`(독자 프로필), `recommendation`(추천·피드백), `integration.ml`(계산 경계), `user`(사용자), `common.error`(에러 처리 공통)
 
-## 2. 지금 실제로 동작하는 API 11개
+## 2. 지금 실제로 동작하는 API 12개
+
+추가된 `GET /api/assessments/{sessionId}/diagnostics`는 완료한 진단의 난이도별 근거와
+다음 확인 항목을 반환한다. ML PR #31을 포함한 서버와 HTTP 모드가 필요하다.
+기존 완료 상태·프로필은 변경하지 않으며 stub 모드에서는 503을 반환한다.
+[진단 근거 연동](reader-depth-diagnostics.md)에 응답·오류·검증 범위를 설명했다.
 
 ### 2-1. 분야 목록 조회
 

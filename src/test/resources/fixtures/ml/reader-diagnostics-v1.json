@@ -1,0 +1,108 @@
+{
+  "userId": 1,
+  "assessmentId": "42",
+  "topicId": "operating-systems",
+  "responseCount": 3,
+  "untaggedResponseCount": 1,
+  "concepts": [
+    {
+      "conceptId": "process",
+      "observedScore": 0.4444444444444444,
+      "responseCount": 2,
+      "evidence": [
+        {
+          "questionType": "vocabulary",
+          "difficulty": "easy",
+          "responseCount": 1,
+          "score": 1.0,
+          "fullCreditCount": 1,
+          "questionIds": [
+            "q1"
+          ]
+        },
+        {
+          "questionType": "background_knowledge",
+          "difficulty": "easy",
+          "responseCount": 0,
+          "score": null,
+          "fullCreditCount": 0,
+          "questionIds": []
+        },
+        {
+          "questionType": "comprehension",
+          "difficulty": "easy",
+          "responseCount": 0,
+          "score": null,
+          "fullCreditCount": 0,
+          "questionIds": []
+        },
+        {
+          "questionType": "vocabulary",
+          "difficulty": "medium",
+          "responseCount": 0,
+          "score": null,
+          "fullCreditCount": 0,
+          "questionIds": []
+        },
+        {
+          "questionType": "background_knowledge",
+          "difficulty": "medium",
+          "responseCount": 1,
+          "score": 0.0,
+          "fullCreditCount": 0,
+          "questionIds": [
+            "q2"
+          ]
+        },
+        {
+          "questionType": "comprehension",
+          "difficulty": "medium",
+          "responseCount": 0,
+          "score": null,
+          "fullCreditCount": 0,
+          "questionIds": []
+        },
+        {
+          "questionType": "vocabulary",
+          "difficulty": "hard",
+          "responseCount": 0,
+          "score": null,
+          "fullCreditCount": 0,
+          "questionIds": []
+        },
+        {
+          "questionType": "background_knowledge",
+          "difficulty": "hard",
+          "responseCount": 0,
+          "score": null,
+          "fullCreditCount": 0,
+          "questionIds": []
+        },
+        {
+          "questionType": "comprehension",
+          "difficulty": "hard",
+          "responseCount": 0,
+          "score": null,
+          "fullCreditCount": 0,
+          "questionIds": []
+        }
+      ],
+      "fullyObserved": false,
+      "nextCheck": {
+        "questionType": "background_knowledge",
+        "difficulty": "medium",
+        "reason": "review_observed_gap"
+      }
+    }
+  ],
+  "diagnosticVersion": "reader-depth-evidence-v1",
+  "profileVersion": "reader-v1",
+  "configVersion": "reader-config-v1",
+  "configHash": "sha256:9bc1cfbc18eddb39582d7697626269cd11203bec74e2be676a5495b8f91fb73b",
+  "limitations": [
+    "문항에 지정된 난이도별 응답 근거이며 검증된 개인 능력 등급이나 책 난이도가 아닙니다.",
+    "어려운 문항의 정답으로 미응시한 쉬운 문항의 이해도를 추정하지 않습니다.",
+    "입력 계약에 자기평가와 객관식의 구분이 없어 두 응답의 신뢰도를 구분하지 않습니다.",
+    "다음 확인 항목은 진단 제안이며 문항의 존재나 출제를 보장하지 않습니다."
+  ]
+}
