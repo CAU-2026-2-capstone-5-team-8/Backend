@@ -60,7 +60,8 @@ public class ApiExceptionHandler {
         return error(ex.getHttpStatus(), ex.getFailureCode(), ex.getMessage());
     }
     @ExceptionHandler({HandlerMethodValidationException.class, MethodArgumentTypeMismatchException.class,
-            MissingServletRequestParameterException.class})
+            MissingServletRequestParameterException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class})
     ResponseEntity<ApiError> invalid(Exception ex) {
         return error(400, "INVALID_REQUEST", "요청 값의 형식과 범위를 확인해 주세요.");
     }
