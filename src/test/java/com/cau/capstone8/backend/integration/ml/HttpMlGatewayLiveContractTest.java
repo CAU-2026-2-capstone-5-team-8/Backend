@@ -22,6 +22,17 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfEnvironmentVariable(named = "ML_CONTRACT_BASE_URL", matches = "https?://.+")
 class HttpMlGatewayLiveContractTest {
 
+    @Test void pythonServiceReturnsDepthEvidenceForBackendSnapshots() {
+        var gateway = new HttpMlGateway(System.getenv("ML_CONTRACT_BASE_URL"),
+                Duration.ofSeconds(2), Duration.ofSeconds(10));
+        var result = gateway.readerDiagnostics(HttpMlDiagnosticsTest.request());
+        assertThat(result.diagnosticVersion()).isEqualTo("reader-depth-evidence-v1");
+        assertThat(result.concepts()).hasSize(1);
+        assertThat(result.concepts().getFirst().responseCount()).isEqualTo(2);
+        assertThat(result.concepts().getFirst().nextCheck().difficulty()).isEqualTo("medium");
+        assertThat(result.untaggedResponseCount()).isEqualTo(1);
+    }
+
     @Test void pythonServiceAcceptsBackendProfileRequest() {
         var gateway = new HttpMlGateway(System.getenv("ML_CONTRACT_BASE_URL"),
                 Duration.ofSeconds(2), Duration.ofSeconds(10));

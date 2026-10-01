@@ -1,8 +1,12 @@
 # CAU 캡스톤디자인 8조 Backend
 
+완료한 진단의 난이도별 응답 근거는 `GET /api/assessments/{sessionId}/diagnostics`로
+조회합니다. ML PR #31을 포함한 서버와 HTTP 모드가 필요하며, 기존 완료 상태·프로필은
+변경하지 않습니다. [연동 규칙과 오류 처리](docs/reader-depth-diagnostics.md)를 참고하세요.
+
 Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당하는 독서 진단·추천 프로토타입입니다.
 
-현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단, 5단계 독자 프로필, 6단계 추천·피드백**이 구현되어 있습니다. 총 11개 업무 API를 제공하며 진단은 기존 `knowsConcept`(안다/모른다) 자기평가와 승인된 생성형 4지선다 문항을 명시적 mode로 함께 지원합니다. 기본 `stub` 모드는 기존 scalar 프로필·추천을 유지합니다. `ML_MODE=http`는 Python ML의 `/ml/reader-profile`과 명시적 `rank-prerequisite-first-v2` `/ml/rank`를 사용합니다. v2는 scalar score를 만들지 않으며 source-aware concept projection과 저장된 concept readiness를 사용합니다. [생성 문항 handoff 계약](docs/generated-question-handoff-v1.md), [프로필 HTTP 계약](docs/ml-profile-http.md), [ranking-v2 계약·DB·제약](docs/ml-rank-v2-http.md)을 참고하세요.
+현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단, 5단계 독자 프로필, 6단계 추천·피드백**이 구현되어 있습니다. 총 12개 업무 API를 제공하며 진단은 기존 `knowsConcept`(안다/모른다) 자기평가와 승인된 생성형 4지선다 문항을 명시적 mode로 함께 지원합니다. 기본 `stub` 모드는 기존 scalar 프로필·추천을 유지합니다. `ML_MODE=http`는 Python ML의 `/ml/reader-profile`과 명시적 `rank-prerequisite-first-v2` `/ml/rank`를 사용합니다. v2는 scalar score를 만들지 않으며 source-aware concept projection과 저장된 concept readiness를 사용합니다. [생성 문항 handoff 계약](docs/generated-question-handoff-v1.md), [프로필 HTTP 계약](docs/ml-profile-http.md), [ranking-v2 계약·DB·제약](docs/ml-rank-v2-http.md)을 참고하세요.
 
 진단·프로필 API: `POST /api/assessments`, `GET /api/assessments/{sessionId}`, `PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}`, `POST /api/assessments/{sessionId}/complete`, `GET /api/users/{userId}/profiles/{topicId}`. `SELF_REPORT` 답변은 `{"knowsConcept": true}`, `MULTIPLE_CHOICE` 답변은 `{"selectedChoiceIndex": 2}` 형식입니다. 객관식 정답 여부는 발급 snapshot으로 서버가 계산하며 API 응답에는 answer key와 explanation을 노출하지 않습니다. [현재 작동 방식](<docs/current-implementation-overview(작동 방식).md>)을 참고하세요.
 

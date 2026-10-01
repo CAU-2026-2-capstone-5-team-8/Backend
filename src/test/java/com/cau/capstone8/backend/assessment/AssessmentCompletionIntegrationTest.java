@@ -94,6 +94,23 @@ class AssessmentCompletionIntegrationTest {
     }
 
     @Test
+    void diagnosticsRequiresCompletedSessionAndStubFailureDoesNotChangeStoredProfile() throws Exception {
+        assertThat(get("/api/assessments/" + Long.MAX_VALUE + "/diagnostics").statusCode()).isEqualTo(404);
+        long sessionId = createSession();
+        assertThat(get("/api/assessments/" + sessionId + "/diagnostics").statusCode()).isEqualTo(409);
+        answerAll(sessionId, true);
+        assertThat(complete(sessionId).statusCode()).isEqualTo(200);
+        // Compare persisted values: PostgreSQL timestamps round the initial nanoseconds to microseconds.
+        var completed = json.readTree(complete(sessionId).body());
+        var response = get("/api/assessments/" + sessionId + "/diagnostics");
+        assertThat(response.statusCode()).isEqualTo(503);
+        assertThat(json.readTree(response.body()).path("code").asString()).isEqualTo("ML_UNAVAILABLE");
+        var retry = json.readTree(complete(sessionId).body());
+        assertThat(retry.path("profile")).isEqualTo(completed.path("profile"));
+        assertThat(retry.path("status").asString()).isEqualTo("COMPLETED");
+    }
+
+    @Test
     void rejectsConcurrentCompletionWhileLeaseIsActive() throws Exception {
         long sessionId = createSession();
         answerAll(sessionId, true);

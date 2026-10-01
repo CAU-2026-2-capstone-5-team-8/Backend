@@ -48,6 +48,7 @@ Answer writes and complete claims lock the same session row in a short transacti
 | GET /api/assessments/{sessionId} | positive ID | 200 state/questions/saved answers |
 | PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId} | knowsConcept: boolean (required, non-null) | 200 issued question with saved answer |
 | POST /api/assessments/{sessionId}/complete | no body | 200 completed session/profile, including retries |
+| GET /api/assessments/{sessionId}/diagnostics | completed session ID, no body | 200 depth evidence and response sources; requires ML reader-depth-evidence-v1 |
 | GET /api/users/{userId}/profiles/{topicId} | positive IDs | 200 latest completed profile |
 | POST /api/recommendations | userId, topicId, targetBookId?, challengeLevel, topK=5; Idempotency-Key | 201 new success, 200 previous success |
 | GET /api/recommendations/{runId} | positive ID | 200 status/results or sanitized failure |

@@ -128,4 +128,32 @@ public class HttpMlGateway implements MlGateway {
                     "ML_INVALID_RESPONSE", "ML 랭킹 응답이 v2 계약과 일치하지 않습니다.", ex);
         }
     }
+
+    @Override
+    public MlReaderDiagnostics readerDiagnostics(MlProfileRequest request) {
+        String body;
+        try {
+            body = client.post().uri("/ml/reader-diagnostics").contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(json.writeValueAsString(MlProfileHttpContract.toWire(request)))
+                    .retrieve()
+                    .onStatus(status -> !status.is2xxSuccessful(), (req, response) -> {
+                        throw new MlGatewayException("ML_UPSTREAM_ERROR", "ML 서비스가 요청을 처리하지 못했습니다.");
+                    }).body(String.class);
+        } catch (ResourceAccessException ex) {
+            for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+                if (cause instanceof HttpTimeoutException || cause instanceof SocketTimeoutException) {
+                    throw new MlGatewayException("ML_TIMEOUT", "ML 서비스 응답 시간이 초과되었습니다.", ex);
+                }
+            }
+            throw new MlGatewayException("ML_UNAVAILABLE", "ML 서비스에 연결할 수 없습니다.", ex);
+        } catch (RestClientResponseException ex) {
+            throw new MlGatewayException("ML_UPSTREAM_ERROR", "ML 서비스가 요청을 처리하지 못했습니다.", ex);
+        }
+        try {
+            return MlReaderDiagnostics.validate(request, json.readValue(body, MlReaderDiagnostics.class));
+        } catch (RuntimeException ex) {
+            throw new MlGatewayException("ML_INVALID_RESPONSE", "ML 진단 근거 응답이 계약과 일치하지 않습니다.", ex);
+        }
+    }
 }
