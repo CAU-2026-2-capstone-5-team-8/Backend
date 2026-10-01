@@ -18,6 +18,26 @@ v4 runner는 기존 `question-import` profile에 선택적인 세 번째 path를
 ./gradlew bootRun --args='--spring.main.web-application-type=none --spring.profiles.active=local,question-import --question-import.generated-path=/path/to/generated-v4.json --question-import.reviews-path=/path/to/reviews.jsonl --question-import.grounding-path=/path/to/generation-grounding-v2.json'
 ```
 
+여러 건은 import할 파일을 명시적으로 나열한 manifest 하나로 넘길 수 있다. 디렉터리를 scan하지 않으며, 일반 서버 시작에서 자동 import하지 않는 원칙도 그대로다. 상대 경로는 manifest 파일의 디렉터리 기준이고, `grounding_path`는 v4 항목에만 둔다.
+
+```json
+{
+  "manifest_version": "question-import-manifest-v1",
+  "entries": [
+    {"generated_path": "generated-process.json", "reviews_path": "reviews.jsonl"},
+    {"generated_path": "generated-matrix-v4-rev1.json",
+     "reviews_path": "reviews-linear-algebra-display-grounded.jsonl",
+     "grounding_path": "grounding-matrix-v2.json"}
+  ]
+}
+```
+
+```bash
+./gradlew bootRun --args='--spring.main.web-application-type=none --spring.profiles.active=local,question-import --question-import.manifest-path=/path/to/manifest.json'
+```
+
+각 항목은 단건 import와 똑같이 검증한다. 전체가 한 transaction이라 한 항목이라도 거부되면(예: `needs_revision` review) 앞선 항목까지 모두 rollback되고, 오류에 항목 번호와 `generated_path`가 붙는다. 이미 같은 내용으로 import된 항목은 `created=false` no-op이다. manifest의 unknown field, 빈 `entries`, 중복 `generated_path`, 다른 `manifest_version`은 거부한다. `manifest-path`는 단건 path 옵션과 함께 쓸 수 없다.
+
 ## 2. Grounding 검증
 
 Backend-local `generation-grounding-v2` contract는 ML Python module을 import하지 않고 다음을 fail closed 검증한다.
