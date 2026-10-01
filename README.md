@@ -168,7 +168,7 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 
 `ml.mode=stub`용 `MlGateway`와 프로필·추천 요청/응답 검증은 구현되어 있습니다. 추천도 짧은 트랜잭션에서 요청/후보 스냅샷과 처리 임대를 저장하고, DB 트랜잭션 밖에서 계산한 뒤 소유권을 재확인하여 항목과 성공 상태를 함께 저장합니다. 응답이 늦어 임대가 만료되거나 ML 계산이 실패하면 내부 상세 없이 실패 상태만 남깁니다. `ml.mode=http`의 RestClient 기반 `/ml/reader-profile`과 prerequisite-first rank-v2 `/ml/rank` 호출이 모두 구현되어 있습니다. HTTP 장애를 stub 성공으로 자동 전환하지 않습니다.
 
-승인 생성 문항 lifecycle은 `ML QuestionSpec → Question-Generation GeneratedQuestion → HumanQuestionReview(approve) → Backend import → question bank → assessment snapshot → user choice → server-side correctness → ML ReaderProfile`입니다. 기존 self-report path는 호환을 위해 유지됩니다. 현재 Question-Generation은 comprehension 생성을 지원하지 않으므로 approved generated-question만으로 Backend의 3영역·9문항 정책을 충족할 수 없습니다. 누락 comprehension 결과를 합성하지 않으며 generated-only Linear Algebra full assessment가 준비되었다고 보지 않습니다.
+승인 생성 문항 lifecycle은 `ML QuestionSpec → Question-Generation GeneratedQuestion → HumanQuestionReview(approve) → Backend import → question bank → assessment snapshot → user choice → server-side correctness → ML ReaderProfile`입니다. 기존 self-report path는 호환을 위해 유지됩니다. import는 `generated-question-v2`(Level 1 vocabulary/background)와 `generated-question-v4`(grounded comprehension/apply Level 2, `generation-grounding-v2` 파일 필수)를 받고, passage가 stem에 합쳐진 v3는 거부합니다. comprehension 생성은 v4로 가능해졌지만 2026-09-29 기준 human-approved comprehension 문항은 Linear Algebra 1개뿐이라, approved generated-question만으로 3영역·9문항 정책을 아직 충족할 수 없습니다. 누락 comprehension 결과를 합성하지 않으며 generated-only full assessment가 준비되었다고 보지 않습니다.
 
 인증 추가 시 클라이언트가 보내는 userId를 신뢰하는 데모 방식을 인증된 `/api/me`로 바꿉니다.
 
@@ -182,4 +182,4 @@ main 직접 커밋 금지, 승인 없는 merge/force push 금지. 작은 기능 
 - [3단계 구현 계획](docs/superpowers/plans/2026-09-12-catalog.md)
 - [3단계 검증 결과](docs/verification-stage3.md)
 
-다음 생성 문항 단계는 Question-Generation의 comprehension 지원과 각 영역 최소 3개의 human-approved bank coverage 확보입니다. rank-v2 HTTP 연동은 이미 구현되어 있습니다. [5단계 검증](docs/verification-stage5.md)과 [6단계 검증](docs/verification-stage6.md)을 참고하세요.
+다음 생성 문항 단계는 각 영역 최소 3개의 human-approved bank coverage 확보입니다(현재 comprehension이 부족). rank-v2 HTTP 연동은 이미 구현되어 있습니다. [5단계 검증](docs/verification-stage5.md)과 [6단계 검증](docs/verification-stage6.md)을 참고하세요.
