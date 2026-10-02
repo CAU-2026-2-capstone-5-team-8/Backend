@@ -11,13 +11,17 @@ import org.springframework.web.bind.annotation.*;
 public class AssessmentController {
     private final AssessmentService service;
     private final AssessmentCompletionService completionService;
-    public AssessmentController(AssessmentService service, AssessmentCompletionService completionService) {
+    private final com.cau.capstone8.backend.account.AccountOwnership ownership;
+    public AssessmentController(AssessmentService service, AssessmentCompletionService completionService,
+            com.cau.capstone8.backend.account.AccountOwnership ownership) {
         this.service = service;
         this.completionService = completionService;
+        this.ownership = ownership;
     }
 
     @PostMapping
     public ResponseEntity<AssessmentResponse> create(@RequestBody @Valid AssessmentCreateRequest request) {
+        ownership.user(request.userId());
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request.userId(), request.topicId()));
     }
 

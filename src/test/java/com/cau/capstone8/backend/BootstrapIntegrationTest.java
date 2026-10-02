@@ -83,7 +83,9 @@ class BootstrapIntegrationTest {
 
     private HttpResponse<String> get(String path) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                .timeout(Duration.ofSeconds(10))
+                // Initial OpenAPI generation loads the complete model graph; mounted WSL
+                // filesystems can exceed ten seconds before its first response.
+                .timeout(Duration.ofSeconds(path.equals("/v3/api-docs") ? 30 : 10))
                 .GET()
                 .build();
         try (var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()) {
