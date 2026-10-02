@@ -1,5 +1,13 @@
 # CAU 캡스톤디자인 8조 Backend
 
+이 브랜치는 이메일·비밀번호 계정과 독서 준비도 마이페이지 API를 추가합니다.
+기본 실행은 인증 필수이며, 회원가입/로그인 후 받은 토큰을 `Authorization: Bearer <token>`으로 전송합니다.
+`GET/PUT /api/me`, `GET /api/me/readiness`, 분야별 `history`와 `diagnostics`를 제공합니다.
+기존 사용자 번호만 사용하는 프론트 데모에는 명시적으로 `APP_AUTH_MODE=demo`가 필요합니다.
+등록 계정의 정보는 demo 모드에서도 인증 없이 조회·수정할 수 없습니다.
+프론트 로그인 화면 및 Authorization 전달은 별도 연결이 필요합니다.
+[요청·응답 계약과 검증 범위](docs/account-reader-profiles.md)를 참고하세요.
+
 완료한 진단의 난이도별 응답 근거는 `GET /api/assessments/{sessionId}/diagnostics`로
 조회합니다. ML PR #31을 포함한 서버와 HTTP 모드가 필요하며, 기존 완료 상태·프로필은
 변경하지 않습니다. [연동 규칙과 오류 처리](docs/reader-depth-diagnostics.md)를 참고하세요.
@@ -124,7 +132,7 @@ WSL 주소는 재시작 후 바뀔 수 있으므로 매번 조회합니다. 이 
 | ASSESSMENT_PROCESSING_LEASE | 완료 처리 소유권 임대 시간. 기본값 `PT30S` |
 | RECOMMENDATION_PROCESSING_LEASE | 추천 처리 소유권 임대 시간. 기본값 `PT30S` |
 
-`local` 이외의 환경은 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`로 접속 정보를 전달합니다. DB 포트는 Compose에서 `127.0.0.1`에만 바인딩합니다. MVP는 인증을 제공하지 않으며 외부 공개 배포는 범위에 포함되지 않습니다.
+`local` 이외의 환경은 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`로 접속 정보를 전달합니다. DB 포트는 Compose에서 `127.0.0.1`에만 바인딩합니다. 기본 실행은 Bearer 인증을 요구합니다. 외부 공개 배포 전 HTTPS, 이메일 확인·복구, 분산 요청 제한과 운영 정책을 별도로 준비해야 합니다.
 
 ## 테스트와 빌드
 
@@ -174,11 +182,11 @@ GitHub Actions는 PR과 push에서 Java 21·Ubuntu로 전체 테스트와 빌드
 
 승인 생성 문항 lifecycle은 `ML QuestionSpec → Question-Generation GeneratedQuestion → HumanQuestionReview(approve) → Backend import → question bank → assessment snapshot → user choice → server-side correctness → ML ReaderProfile`입니다. 기존 self-report path는 호환을 위해 유지됩니다. import는 `generated-question-v2`(Level 1 vocabulary/background)와 `generated-question-v4`(grounded comprehension/apply Level 2, `generation-grounding-v2` 파일 필수)를 받고, passage가 stem에 합쳐진 v3는 거부합니다. comprehension 생성은 v4로 가능해졌지만 2026-09-29 기준 human-approved comprehension 문항은 Linear Algebra 1개뿐이라, approved generated-question만으로 3영역·9문항 정책을 아직 충족할 수 없습니다. 누락 comprehension 결과를 합성하지 않으며 generated-only full assessment가 준비되었다고 보지 않습니다.
 
-인증 추가 시 클라이언트가 보내는 userId를 신뢰하는 데모 방식을 인증된 `/api/me`로 바꿉니다.
+`/api/me`는 Bearer 토큰으로 사용자를 결정합니다. 기존 API의 userId·sessionId·runId·itemId 역시 인증된 계정의 소유권을 검증합니다.
 
 ## 협업과 다음 단계
 
-내 서재(읽고 싶어요/읽는 중/완독, 메모)와 책별 공개 한줄평·체감 난이도 API를 추가했습니다. [서재·후기 API와 데모 사용자 범위](docs/reading-shelf-reviews.md)를 참고하세요. 현재 인증 없는 로컬 프로토타입이며 공개 후기에는 서재 메모를 포함하지 않습니다.
+내 서재(읽고 싶어요/읽는 중/완독, 메모)와 책별 공개 한줄평·체감 난이도 API를 추가했습니다. [서재·후기 API와 데모 사용자 범위](docs/reading-shelf-reviews.md)를 참고하세요. 등록 계정은 인증·소유권 검사를 적용하며 공개 후기에는 서재 메모를 포함하지 않습니다.
 
 main 직접 커밋 금지, 승인 없는 merge/force push 금지. 작은 기능 단위로 커밋하고 동시에 작업하는 팀원은 별도 기능 브랜치를 사용합니다.
 

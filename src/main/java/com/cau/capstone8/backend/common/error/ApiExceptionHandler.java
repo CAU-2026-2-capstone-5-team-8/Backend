@@ -19,6 +19,10 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(com.cau.capstone8.backend.account.AccountException.class)
+    ResponseEntity<ApiError> account(com.cau.capstone8.backend.account.AccountException ex) {
+        return error(ex.status(), ex.code(), ex.getMessage());
+    }
     private static final Logger LOG = LoggerFactory.getLogger(ApiExceptionHandler.class);
     public record ApiError(String code, String message, String traceId) {}
 

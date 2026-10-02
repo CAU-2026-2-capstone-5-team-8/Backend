@@ -48,5 +48,9 @@ ml:
 assessment:
   processing-lease: ${ASSESSMENT_PROCESSING_LEASE:PT30S}
 
+app:
+  auth:
+    mode: ${APP_AUTH_MODE:required}
+
 recommendation:
   processing-lease: ${RECOMMENDATION_PROCESSING_LEASE:PT30S}
