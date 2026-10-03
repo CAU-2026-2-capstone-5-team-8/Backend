@@ -200,4 +200,8 @@ main 직접 커밋 금지, 승인 없는 merge/force push 금지. 작은 기능 
 - [3단계 구현 계획](docs/superpowers/plans/2026-09-12-catalog.md)
 - [3단계 검증 결과](docs/verification-stage3.md)
 
-다음 생성 문항 단계는 각 영역 최소 3개의 human-approved bank coverage 확보입니다(현재 comprehension이 부족). rank-v2 HTTP 연동은 이미 구현되어 있습니다. [5단계 검증](docs/verification-stage5.md)과 [6단계 검증](docs/verification-stage6.md)을 참고하세요.
+위의 v2/v4 지문 문항 현황은 이전 검증 시점의 기록입니다. 현재 개념 진단 v5는 의미·적용·추론 문항을
+사용하며, 사용자에게 위임받은 AI 내용 검토도 별도 계약으로 등록할 수 있습니다.
+[AI 검토 등록 계약](docs/ai-question-review-v1.md)을 참고하세요. AI 판정은 `aiReview`로 보존하며
+기존 `humanReview` 기록과 구분합니다. rank-v2 HTTP 연동은 이미 구현되어 있습니다.
+[5단계 검증](docs/verification-stage5.md)과 [6단계 검증](docs/verification-stage6.md)을 참고하세요.

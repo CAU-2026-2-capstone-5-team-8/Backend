@@ -167,9 +167,12 @@ public class ApprovedQuestionImportService {
             byte[] groundingBytes) {
         GeneratedQuestionHandoff generated = parseGeneratedQuestion(generatedQuestionJson);
         GenerationGroundingV2Handoff grounding = validateGrounding(generated, groundingBytes);
-        HumanQuestionReviewHandoff review = matchingReview(
+        ParsedReview review = matchingReview(
                 reviewsJsonl, generated.generatedQuestionId());
-        requireApproval(review);
+        requireApproval(review.judgment());
+        if (review.ai() != null && !(generated instanceof GeneratedQuestionV5Handoff)) {
+            throw new QuestionImportException("AI content reviews currently support only generated-question-v5");
+        }
 
         String contentHash = contentHash(generated);
         var existing = questions.findByGeneratedQuestionId(generated.generatedQuestionId());
@@ -185,7 +188,16 @@ public class ApprovedQuestionImportService {
                 .orElseThrow(() -> new QuestionImportException(
                         "no Backend topic matches generated topic_id: " + generated.topicId()));
         Map<String, Object> provenance = new LinkedHashMap<>(generated.provenance());
-        provenance.put("humanReview", reviewProvenance(review));
+        Map<String, Object> reviewMetadata = new LinkedHashMap<>(reviewProvenance(review.judgment()));
+        if (review.ai() == null) {
+            provenance.put("humanReview", reviewMetadata);
+        } else {
+            reviewMetadata.put("reviewVersion", review.ai().reviewVersion());
+            reviewMetadata.put("reviewerType", review.ai().reviewerType());
+            reviewMetadata.put("reviewerName", review.ai().reviewerName());
+            reviewMetadata.put("validationScope", review.ai().validationScope());
+            provenance.put("aiReview", reviewMetadata);
+        }
         if (grounding != null) {
             provenance.put("groundingSource", grounding.safeSourceProvenance());
         }
@@ -310,30 +322,41 @@ public class ApprovedQuestionImportService {
         }
     }
 
-    private HumanQuestionReviewHandoff matchingReview(String jsonl, String generatedQuestionId) {
-        List<HumanQuestionReviewHandoff> matching;
+    private record ParsedReview(QuestionReviewJudgment judgment, AiQuestionReviewHandoff ai) {}
+
+    private ParsedReview parseReview(String line) {
+        JsonNode tree = JSON.readTree(line);
+        if (tree.has("review_version") || tree.has("reviewer_type") || tree.has("review")) {
+            AiQuestionReviewHandoff ai = JSON.readValue(line, AiQuestionReviewHandoff.class);
+            return new ParsedReview(ai.review(), ai);
+        }
+        return new ParsedReview(JSON.readValue(line, QuestionReviewJudgment.class), null);
+    }
+
+    private ParsedReview matchingReview(String jsonl, String generatedQuestionId) {
+        List<ParsedReview> matching;
         try {
             matching = jsonl.lines()
                     .filter(line -> !line.isBlank())
-                    .map(line -> JSON.readValue(line, HumanQuestionReviewHandoff.class))
-                    .filter(review -> review.generatedQuestionId().equals(generatedQuestionId))
+                    .map(this::parseReview)
+                    .filter(review -> review.judgment().generatedQuestionId().equals(generatedQuestionId))
                     .toList();
         } catch (QuestionImportException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw new QuestionImportException("HumanQuestionReview JSONL is malformed", exception);
+            throw new QuestionImportException("question review JSONL is malformed", exception);
         }
         if (matching.size() != 1) {
             throw new QuestionImportException(
-                    "exactly one matching HumanQuestionReview is required");
+                    "exactly one matching question review is required");
         }
         return matching.getFirst();
     }
 
-    private void requireApproval(HumanQuestionReviewHandoff review) {
+    private void requireApproval(QuestionReviewJudgment review) {
         if (!"approve".equals(review.status()) || !review.correct()) {
             throw new QuestionImportException(
-                    "only HumanQuestionReview status=approve and correct=true may be imported");
+                    "only question review status=approve and correct=true may be imported");
         }
     }
 
@@ -356,7 +379,7 @@ public class ApprovedQuestionImportService {
         }
     }
 
-    private Map<String, Object> reviewProvenance(HumanQuestionReviewHandoff review) {
+    private Map<String, Object> reviewProvenance(QuestionReviewJudgment review) {
         return Map.of(
                 "status", review.status(),
                 "correct", review.correct(),

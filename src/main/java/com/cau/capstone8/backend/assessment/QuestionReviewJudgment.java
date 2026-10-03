@@ -3,7 +3,7 @@ package com.cau.capstone8.backend.assessment;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-record HumanQuestionReviewHandoff(
+record QuestionReviewJudgment(
         String generatedQuestionId,
         String status,
         boolean correct,
@@ -15,7 +15,7 @@ record HumanQuestionReviewHandoff(
     private static final Pattern GENERATED_ID = Pattern.compile("^gq_[0-9a-f]{32}$");
     private static final Set<String> STATUSES = Set.of("approve", "reject", "needs_revision");
 
-    HumanQuestionReviewHandoff {
+    QuestionReviewJudgment {
         if (generatedQuestionId == null || !GENERATED_ID.matcher(generatedQuestionId).matches()) {
             throw new QuestionImportException("review generated_question_id has an invalid format");
         }
