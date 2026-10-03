@@ -11,6 +11,8 @@ public record AssessmentResponse(long id, long userId, long topicId, String stat
             String passage,
             String prompt,
             String answerMode,
+            String cognitiveOperation,
+            String measurementContext,
             List<String> choices,
             Boolean knowsConcept,
             Integer selectedChoiceIndex) {}

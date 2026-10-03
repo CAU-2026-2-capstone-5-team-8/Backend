@@ -36,10 +36,24 @@ public class AssessmentService {
 
     @Transactional
     public AssessmentResponse create(long userId, long topicId) {
+        return create(userId, topicId, false);
+    }
+
+    @Transactional
+    public AssessmentResponse createConceptAssessment(long userId, long topicId) {
+        return create(userId, topicId, true);
+    }
+
+    private AssessmentResponse create(long userId, long topicId, boolean conceptPolicy) {
         if (!users.existsById(userId)) throw new ResourceNotFoundException("사용자를 찾을 수 없습니다.");
         if (!topics.existsById(topicId)) throw new ResourceNotFoundException("분야를 찾을 수 없습니다.");
 
-        List<Question> sampled = questions.sampleActiveByTopic(topicId, QUESTIONS_PER_AREA);
+        List<Question> sampled = conceptPolicy
+                ? ConceptQuestionSelection.select(questions.findByTopicIdAndActiveTrueOrderById(topicId), TOTAL_QUESTIONS,
+                        questions.answeredExposure(userId, topicId).stream().collect(Collectors.toMap(
+                                row -> ((Number) row[0]).longValue(),
+                                row -> ((Number) row[1]).longValue())))
+                : questions.sampleActiveByTopic(topicId, QUESTIONS_PER_AREA);
         // Sampling short-circuits per area; fewer than the full set means the topic's bank isn't demo-ready yet.
         if (sampled.size() != TOTAL_QUESTIONS) {
             throw new QuestionBankUnavailableException("선택한 분야에 진단 문항이 충분히 준비되어 있지 않습니다.");
@@ -145,6 +159,8 @@ public class AssessmentService {
                 question.getPassageSnapshot(),
                 question.getPromptSnapshot(),
                 question.getAnswerModeSnapshot().name(),
+                question.getCognitiveOperationSnapshot(),
+                question.getMeasurementContextSnapshot(),
                 choices,
                 answer == null ? null : answer.getKnowsConcept(),
                 answer == null ? null : answer.getSelectedChoiceIndex());

@@ -7,7 +7,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/books")
 public class BookController {
     private final BookService service;
-    public BookController(BookService service) { this.service = service; }
+    private final CatalogSummaryService summary;
+    public BookController(BookService service, CatalogSummaryService summary) { this.service = service; this.summary = summary; }
+    @GetMapping("/summary")
+    public CatalogSummaryService.Summary summary() { return summary.summary(); }
     @GetMapping
     public BookResponse.Page list(@RequestParam(required = false) @Positive Long topicId,
                                   @RequestParam(defaultValue = "0") @Min(0) int page,

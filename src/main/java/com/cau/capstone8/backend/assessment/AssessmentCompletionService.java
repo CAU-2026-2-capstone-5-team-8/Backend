@@ -128,7 +128,10 @@ public class AssessmentCompletionService {
                         question.getConceptIdSnapshot(),
                         question.getDifficultySnapshot(),
                         answerByQuestion.get(question.getId()).resultForMl(),
-                        1.0))
+                        1.0,
+                        question.getCognitiveOperationSnapshot(),
+                        question.getAnswerModeSnapshot().name(),
+                        question.getMeasurementContextSnapshot()))
                 .toList();
         MlProfileRequest request = new MlProfileRequest(
                 attemptId,

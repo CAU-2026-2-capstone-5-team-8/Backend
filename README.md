@@ -5,7 +5,8 @@
 `GET/PUT /api/me`, `GET /api/me/readiness`, 분야별 `history`와 `diagnostics`를 제공합니다.
 기존 사용자 번호만 사용하는 프론트 데모에는 명시적으로 `APP_AUTH_MODE=demo`가 필요합니다.
 등록 계정의 정보는 demo 모드에서도 인증 없이 조회·수정할 수 없습니다.
-프론트 로그인 화면 및 Authorization 전달은 별도 연결이 필요합니다.
+Expo 앱의 회원가입·로그인·내 계정과 Authorization 전달을 연결했습니다.
+개념 진단·추천의 계정 소유권과 DB 업그레이드 범위는 [통합 기록](docs/account-concept-integration.md)을 참고하세요.
 [요청·응답 계약과 검증 범위](docs/account-reader-profiles.md)를 참고하세요.
 
 완료한 진단의 난이도별 응답 근거는 `GET /api/assessments/{sessionId}/diagnostics`로
@@ -14,13 +15,16 @@
 
 Spring Boot가 API와 PostgreSQL을 담당하고 Python ML이 계산을 담당하는 독서 진단·추천 프로토타입입니다.
 
-현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단, 5단계 독자 프로필, 6단계 추천·피드백**이 구현되어 있습니다. 총 12개 업무 API를 제공하며 진단은 기존 `knowsConcept`(안다/모른다) 자기평가와 승인된 생성형 4지선다 문항을 명시적 mode로 함께 지원합니다. 기본 `stub` 모드는 기존 scalar 프로필·추천을 유지합니다. `ML_MODE=http`는 Python ML의 `/ml/reader-profile`과 명시적 `rank-prerequisite-first-v2` `/ml/rank`를 사용합니다. v2는 scalar score를 만들지 않으며 source-aware concept projection과 저장된 concept readiness를 사용합니다. [생성 문항 handoff 계약](docs/generated-question-handoff-v1.md), [프로필 HTTP 계약](docs/ml-profile-http.md), [ranking-v2 계약·DB·제약](docs/ml-rank-v2-http.md)을 참고하세요.
+현재 이 브랜치에는 **3단계 분야·도서 조회, 4단계 진단, 5단계 독자 프로필, 6단계 추천·피드백**이 구현되어 있습니다. 진단은 기존 `knowsConcept`(안다/모른다) 자기평가와 승인된 생성형 4지선다 문항을 명시적 mode로 함께 지원합니다. 기본 `stub` 모드는 기존 scalar 프로필·추천을 유지합니다. `ML_MODE=http`는 Python ML의 `/ml/reader-profile`과 명시적 `rank-prerequisite-first-v2` `/ml/rank`를 사용합니다. v2는 scalar score를 만들지 않으며 source-aware concept projection과 저장된 concept readiness를 사용합니다. [생성 문항 handoff 계약](docs/generated-question-handoff-v1.md), [프로필 HTTP 계약](docs/ml-profile-http.md), [ranking-v2 계약·DB·제약](docs/ml-rank-v2-http.md)을 참고하세요.
 
 진단·프로필 API: `POST /api/assessments`, `GET /api/assessments/{sessionId}`, `PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId}`, `POST /api/assessments/{sessionId}/complete`, `GET /api/users/{userId}/profiles/{topicId}`. `SELF_REPORT` 답변은 `{"knowsConcept": true}`, `MULTIPLE_CHOICE` 답변은 `{"selectedChoiceIndex": 2}` 형식입니다. 객관식 정답 여부는 발급 snapshot으로 서버가 계산하며 API 응답에는 answer key와 explanation을 노출하지 않습니다. [현재 작동 방식](<docs/current-implementation-overview(작동 방식).md>)을 참고하세요.
 
 추천 API: `POST /api/recommendations` (`Idempotency-Key` 헤더 필수), `GET /api/recommendations/{runId}`, `POST /api/recommendations/{itemId}/feedback`. 추천 요청 예시는 `{"userId":1,"topicId":2,"challengeLevel":"BALANCED","topK":5}`이며, 특정 도서는 `targetBookId`를 추가하면 됩니다. 완료된 독자 프로필과 해당 분야의 활성 도서 특성이 필요합니다. 같은 사용자의 같은 키·같은 입력은 기존 결과를 재생하고, 같은 키·다른 입력이나 처리 중 중복 호출은 409입니다. 실패한 키는 정제된 오류를 재생하므로 새 계산에는 새 키를 사용하세요. 피드백은 `{"userId":1,"helpful":true,"comment":"도움이 됐어요"}` 형식으로 최초 201·재제출 200이며, 소유자가 다르면 409입니다.
 
 VS Code REST Client로 ranking-v2 전체 흐름을 수동 확인하려면 Backend를 `ML_MODE=http`로 시작하고 ML 서버를 함께 실행한 뒤, 대상 도서와 활성 v2 projection이 DB에 import되어 있어야 합니다. [requests/recommendation-v2.http](requests/recommendation-v2.http)의 변수(`userId`, `topicId`, 매 요청마다 새 `idempotencyKey`)를 맞춰 위에서부터 실행하세요. Frontend는 Python 응답이 아니라 Backend recommendation response만 소비합니다.
+
+
+개념 중심 RN 앱은 `POST /api/assessments/concepts`, `GET /api/topics/{topicId}/concept-map?bookId=...`, `POST /api/learning-recommendations`, `GET /api/learning-recommendations/{id}`를 사용합니다. 개념·능력별 objective 관찰과 자기평가를 분리하며, 새 추천은 기존 세 영역 총점 대신 선택 능력의 평가 결과를 사용합니다. `POST /api/learning-recommendations`에는 `Idempotency-Key`와 `userId`, `topicId`, `profileId`, `ability`, `topK`를 전달합니다. 상세 계약·제약·실행 기록은 [개념 진단·추천 설계](docs/concept-learning-v1.md)를 참고하세요.
 
 ## 요구 환경
 

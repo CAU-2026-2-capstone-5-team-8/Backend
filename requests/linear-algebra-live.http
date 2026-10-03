@@ -1,0 +1,93 @@
+# Run each named request from top to bottom. Bootstrap IDs below are from the isolated DB.
+# Change userId/topicId to ASSESSMENT_BOOTSTRAP_RESULT when using a different DB.
+# All answers are synthetic validation answers. Never use question-bank IDs as issued IDs.
+# JSONPath filters select each issued ID despite randomized display order.
+@baseUrl = http://127.0.0.1:8087
+@userId = 1
+@topicId = 2
+
+### Create a NEW session for each answer comparison
+# @name laStart
+POST {{baseUrl}}/api/assessments
+Content-Type: application/json
+
+{"userId": {{userId}}, "topicId": {{topicId}}}
+
+### SELF_REPORT: matrix
+# @name laAnswer1
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'matrix' && @.measurementArea == 'VOCABULARY' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### SELF_REPORT: vector
+# @name laAnswer2
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'vector' && @.measurementArea == 'VOCABULARY' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### SELF_REPORT: linear system
+# @name laAnswer3
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'linear system' && @.measurementArea == 'VOCABULARY' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### SELF_REPORT: systems of equations
+# @name laAnswer4
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'systems of equations' && @.measurementArea == 'BACKGROUND_KNOWLEDGE' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### SELF_REPORT: high school algebra
+# @name laAnswer5
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'high school algebra' && @.measurementArea == 'BACKGROUND_KNOWLEDGE' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### SELF_REPORT: vector space
+# @name laAnswer6
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'vector space' && @.measurementArea == 'BACKGROUND_KNOWLEDGE' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### SELF_REPORT: basis
+# @name laAnswer7
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'basis' && @.measurementArea == 'COMPREHENSION' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### SELF_REPORT: eigenvalue
+# @name laAnswer8
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.conceptId == 'eigenvalue' && @.measurementArea == 'COMPREHENSION' && @.answerMode == 'SELF_REPORT')].id}}
+Content-Type: application/json
+
+{"knowsConcept": true}
+
+### Approved v4 MULTIPLE_CHOICE; synthetic selected index, server grades it
+# @name laAnswer9
+PUT {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/answers/{{laStart.response.body.$.questions[?(@.answerMode == 'MULTIPLE_CHOICE')].id}}
+Content-Type: application/json
+
+{"selectedChoiceIndex": 3}
+
+### Actual ML profile (ML_MODE=http required); re-send returns the same profile
+# @name laComplete
+POST {{baseUrl}}/api/assessments/{{laStart.response.body.$.id}}/complete
+
+### Stored profile + active imported projections; replay returns the same run
+# @name laRecommend
+POST {{baseUrl}}/api/recommendations
+Content-Type: application/json
+Idempotency-Key: la-rest-client-session-{{laStart.response.body.$.id}}
+
+{"userId": {{laComplete.response.body.$.userId}}, "topicId": {{laComplete.response.body.$.topicId}}, "challengeLevel": "BALANCED", "topK": 5}
+
+### Read the saved run (no new ML calculation)
+# @name laReadback
+GET {{baseUrl}}/api/recommendations/{{laRecommend.response.body.$.id}}

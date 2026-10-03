@@ -207,7 +207,7 @@ public class ApprovedQuestionImportService {
         return new ImportResult(saved.getId(), generated.generatedQuestionId(), true);
     }
 
-    private GeneratedQuestionHandoff parseGeneratedQuestion(String json) {
+    GeneratedQuestionHandoff parseGeneratedQuestion(String json) {
         try {
             JsonNode root = JSON.readTree(json);
             JsonNode versionNode = root == null ? null : root.get("generated_question_version");
@@ -219,11 +219,14 @@ public class ApprovedQuestionImportService {
                         root, GeneratedQuestionV2Handoff.class);
                 case "generated-question-v4" -> JSON.treeToValue(
                         root, GeneratedQuestionV4Handoff.class);
+                case "generated-question-v5" -> JSON.treeToValue(
+                        root, GeneratedQuestionV5Handoff.class);
                 default -> throw new QuestionImportException(
                         "unsupported generated_question_version");
             };
-            if (generated instanceof GeneratedQuestionV4Handoff v4) {
-                validateV4GeneratedId(v4);
+            if (generated instanceof GeneratedQuestionV4Handoff
+                    || generated instanceof GeneratedQuestionV5Handoff) {
+                validateContentGeneratedId(generated);
             }
             return generated;
         } catch (QuestionImportException exception) {
@@ -236,10 +239,11 @@ public class ApprovedQuestionImportService {
     private GenerationGroundingV2Handoff validateGrounding(
             GeneratedQuestionHandoff generated,
             byte[] groundingBytes) {
-        if (generated instanceof GeneratedQuestionV2Handoff) {
+        if (generated instanceof GeneratedQuestionV2Handoff
+                || generated instanceof GeneratedQuestionV5Handoff) {
             if (groundingBytes != null) {
                 throw new QuestionImportException(
-                        "generated-question-v2 must not include a grounding artifact");
+                        "this question version must not include a grounding artifact");
             }
             return null;
         }
@@ -286,7 +290,7 @@ public class ApprovedQuestionImportService {
         return grounding;
     }
 
-    private void validateV4GeneratedId(GeneratedQuestionV4Handoff generated) {
+    private void validateContentGeneratedId(GeneratedQuestionHandoff generated) {
         Map<String, Object> identityAndOutput = new TreeMap<>(
                 JSON.convertValue(generated, OBJECT_MAP));
         identityAndOutput.remove("generated_question_id");
@@ -295,7 +299,7 @@ public class ApprovedQuestionImportService {
                 .substring(0, 32);
         if (!expected.equals(generated.generatedQuestionId())) {
             throw new QuestionImportException(
-                    "generated_question_id does not match v4 identity and output");
+                    "generated_question_id does not match identity and output");
         }
     }
 

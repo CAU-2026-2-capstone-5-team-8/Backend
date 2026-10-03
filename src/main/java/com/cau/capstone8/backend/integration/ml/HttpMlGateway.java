@@ -86,6 +86,35 @@ public class HttpMlGateway implements MlGateway {
     }
 
     @Override
+    public java.util.Map<String, Object> conceptGraph(String topicId) {
+        try {
+            String body = client.get().uri("/ml/concepts/{topic}", topicId)
+                    .accept(MediaType.APPLICATION_JSON).retrieve().body(String.class);
+            var graph = json.readValue(body,
+                    new tools.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {});
+            if (!topicId.equals(graph.get("topicId")) || !(graph.get("nodes") instanceof java.util.List)
+                    || !(graph.get("edges") instanceof java.util.List)) {
+                throw new IllegalArgumentException("invalid concept graph");
+            }
+            return graph;
+        } catch (RuntimeException exception) {
+            throw new MlGatewayException("ML_CONCEPTS_UNAVAILABLE", "개념 지도를 불러오지 못했습니다.", exception);
+        }
+    }
+
+    @Override
+    public java.util.Map<String, Object> learningFit(java.util.Map<String, Object> request) {
+        try {
+            String body = client.post().uri("/ml/learning-fit").contentType(MediaType.APPLICATION_JSON)
+                    .body(json.writeValueAsString(request)).retrieve().body(String.class);
+            return json.readValue(body,
+                    new tools.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {});
+        } catch (RuntimeException exception) {
+            throw new MlGatewayException("ML_LEARNING_UNAVAILABLE", "개념 추천을 계산하지 못했습니다.", exception);
+        }
+    }
+
+    @Override
     public MlRankV2Result rankBooksV2(MlRankV2Request request) {
         String body;
         try {

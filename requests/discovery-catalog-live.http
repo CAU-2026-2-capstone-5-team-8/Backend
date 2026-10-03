@@ -1,0 +1,16 @@
+@backend = http://127.0.0.1:8087
+
+### Catalog counts and topic readiness
+GET {{backend}}/api/books/summary
+
+### Get actual topic IDs instead of assuming topic IDs on a fresh DB
+GET {{backend}}/api/topics
+
+### All 471 canonical books (stable DB ID order)
+GET {{backend}}/api/books?page=0&size=100
+
+### Second page
+GET {{backend}}/api/books?page=1&size=100
+
+### LA ID is 2 only in this recorded local database
+GET {{backend}}/api/books?topicId=2&page=0&size=100
