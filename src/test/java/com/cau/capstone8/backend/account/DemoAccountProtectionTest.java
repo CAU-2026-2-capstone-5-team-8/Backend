@@ -21,6 +21,21 @@ class DemoAccountProtectionTest {
     @Autowired AccountService accounts;
     @Autowired JdbcTemplate jdbc;
 
+    @Test void demoModeProtectsNewConceptCreateAndLearningCreate() throws Exception {
+        var registered=accounts.register(new AccountModels.Register(
+                UUID.randomUUID()+"@example.com","example-password-123","Account"));
+        try (var client=HttpClient.newHttpClient()) {
+            for (String endpoint : java.util.List.of("/api/assessments/concepts", "/api/learning-recommendations")) {
+                String body="{\"userId\":"+registered.userId()+",\"topicId\":1"+
+                        (endpoint.contains("learning") ? ",\"profileId\":1,\"ability\":\"application\",\"topK\":5" : "")+"}";
+                var response=client.send(HttpRequest.newBuilder(URI.create("http://localhost:"+port+endpoint))
+                        .header("Content-Type","application/json").header("Idempotency-Key",UUID.randomUUID().toString())
+                        .POST(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());
+                assertThat(response.statusCode()).as(endpoint).isEqualTo(401);
+            }
+        }
+    }
+
     @Test void demoModeNeverExposesRegisteredAccountThroughLegacyUserPath() throws Exception {
         var session=accounts.register(new AccountModels.Register(
                 UUID.randomUUID()+"@example.com","example-password-123","Account"));

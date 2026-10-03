@@ -43,7 +43,8 @@ Answer writes and complete claims lock the same session row in a short transacti
 | --- | --- | --- |
 | GET /api/topics | none | 200 topic IDs, names, parent IDs |
 | GET /api/books | topicId, page=0, size=20 | 200 page of books |
-| GET /api/books/{bookId} | positive ID | 200 book/topics/feature availability |
+| GET /api/books/{bookId} | positive ID | 200 book/topics/feature availability, TOC coverage, rank-v2 projection status |
+| GET /api/books/summary | none | 200 distinct catalog/TOC/projection/concept counts and per-topic readiness |
 | POST /api/assessments | userId, topicId | 201 session and nine issued questions |
 | GET /api/assessments/{sessionId} | positive ID | 200 state/questions/saved answers |
 | PUT /api/assessments/{sessionId}/answers/{assessmentQuestionId} | knowsConcept: boolean (required, non-null) | 200 issued question with saved answer |

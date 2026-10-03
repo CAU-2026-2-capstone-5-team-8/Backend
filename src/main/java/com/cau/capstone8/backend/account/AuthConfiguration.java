@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.*;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,7 +29,9 @@ public class AuthConfiguration {
     @Bean UserDetailsService noBasicLogin() {
         return name -> { throw new UsernameNotFoundException("Bearer authentication required"); };
     }
-    @Bean SecurityFilterChain security(HttpSecurity http, AccountService accounts,
+    @Bean
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    SecurityFilterChain security(HttpSecurity http, AccountService accounts,
             @Value("${app.auth.mode:required}") String mode) throws Exception {
         if (!Set.of("required","demo").contains(mode)) throw new IllegalArgumentException("Invalid auth mode");
         // Authentication uses an explicit Authorization header, never ambient cookies/Basic.
@@ -42,7 +45,7 @@ public class AuthConfiguration {
                     .accessDeniedHandler((req,res,ex) -> error(res,403,"FORBIDDEN","접근 권한이 없습니다.")))
                 .authorizeHttpRequests(a -> {
                     a.requestMatchers("/api/auth/register","/api/auth/login","/actuator/health","/error").permitAll()
-                     .requestMatchers(HttpMethod.GET,"/api/topics","/api/books","/api/books/**").permitAll()
+                     .requestMatchers(HttpMethod.GET,"/api/topics","/api/topics/*/concept-map","/api/books","/api/books/**").permitAll()
                      .requestMatchers(HttpMethod.GET,"/swagger-ui.html","/swagger-ui/**","/v3/api-docs","/v3/api-docs/**").permitAll()
                      .requestMatchers("/api/me","/api/me/**","/api/auth/logout").authenticated();
                     if (mode.equals("demo")) a.anyRequest().permitAll();

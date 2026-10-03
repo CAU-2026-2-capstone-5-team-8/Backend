@@ -188,6 +188,45 @@ class AccountProfilesIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.feedback WHERE recommendation_item_id=?",Long.class,item)).isZero();
     }
 
+    @Test void conceptAssessmentAndLearningResultsEnforceAccountOwnership() throws Exception {
+        for (String area : List.of("VOCABULARY", "BACKGROUND_KNOWLEDGE", "COMPREHENSION")) {
+            for (int i=0;i<3;i++) jdbc.update("""
+                    INSERT INTO backend.question(topic_id,measurement_area,difficulty,prompt,concept_id,version,active)
+                    VALUES (?,?,1,'synthetic self report','matrix','account-integration-test',true)
+                    """,topic,area);
+        }
+        long before=jdbc.queryForObject("SELECT count(*) FROM backend.assessment_session WHERE user_id=?",Long.class,bob);
+        assertThat(call("POST","/api/assessments/concepts",aliceToken,Map.of("userId",bob,"topicId",topic)).statusCode()).isEqualTo(403);
+        assertThat(call("POST","/api/assessments/concepts",null,Map.of("userId",bob,"topicId",topic)).statusCode()).isEqualTo(401);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.assessment_session WHERE user_id=?",Long.class,bob)).isEqualTo(before);
+        var created=call("POST","/api/assessments/concepts",bobToken,Map.of("userId",bob,"topicId",topic));
+        assertThat(created.statusCode()).withFailMessage(created.body()).isEqualTo(201);
+        var issued=json.readTree(created.body());
+        long assessment=issued.path("id").asLong();
+        long question=issued.path("questions").get(0).path("id").asLong();
+        assertThat(issued.path("questions").size()).isEqualTo(9);
+        assertThat(call("GET","/api/assessments/"+assessment,aliceToken,null).statusCode()).isEqualTo(403);
+        assertThat(call("PUT","/api/assessments/"+assessment+"/answers/"+question,aliceToken,Map.of("knowsConcept",true)).statusCode()).isEqualTo(403);
+        assertThat(call("PUT","/api/assessments/"+assessment+"/answers/"+question,bobToken,Map.of("knowsConcept",true)).statusCode()).isEqualTo(200);
+        assertThat(json.readTree(call("GET","/api/assessments/"+assessment,bobToken,null).body())
+                .path("questions").get(0).path("knowsConcept").asBoolean()).isTrue();
+
+        long completed=profile(bob,0.5,"reader-v1");
+        long profile=jdbc.queryForObject("SELECT id FROM backend.reader_profile WHERE session_id=?",Long.class,completed);
+        long run=jdbc.queryForObject("""
+                INSERT INTO backend.learning_recommendation(user_id,topic_id,profile_id,request_key,request_hash,input_snapshot,result)
+                VALUES (?,?,?,?,?,'{}','{"items":[],"modelVersion":"concept-learning-v1"}') RETURNING id
+                """,Long.class,bob,topic,profile,UUID.randomUUID().toString(),"b".repeat(64));
+        assertThat(call("GET","/api/learning-recommendations/"+run,null,null).statusCode()).isEqualTo(401);
+        assertThat(call("GET","/api/learning-recommendations/"+run,aliceToken,null).statusCode()).isEqualTo(403);
+        var own=call("GET","/api/learning-recommendations/"+run,bobToken,null);
+        assertThat(own.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(own.body()).path("userId").asLong()).isEqualTo(bob);
+        assertThat(call("POST","/api/learning-recommendations",aliceToken,Map.of(
+                "userId",bob,"topicId",topic,"profileId",profile,"ability","application","topK",5)).statusCode()).isEqualTo(403);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.learning_recommendation WHERE user_id=?",Long.class,bob)).isEqualTo(1);
+    }
+
     void answerEvidence(long session) {
         for (int i=0;i<3;i++) {
             long question=jdbc.queryForObject("""

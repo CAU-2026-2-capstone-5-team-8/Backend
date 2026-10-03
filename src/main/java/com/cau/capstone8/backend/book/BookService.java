@@ -32,8 +32,9 @@ public class BookService {
         var membership = books.findMemberships(rows.stream().map(Book::getId).toList()).stream()
                 .collect(Collectors.groupingBy(BookRepository.TopicMembership::getBookId,
                         Collectors.mapping(t -> new BookResponse.TopicMembership(t.getTopicId(), t.getCode(),
-                                t.getName(), t.getPrimary(), t.getWeight(), t.getFeatureAvailable()), Collectors.toList())));
+                                t.getName(), t.getPrimary(), t.getWeight(), t.getFeatureAvailable(),
+                                t.getTocEntryCount(), t.getRankingCandidate(), t.getCoveredConceptCount()), Collectors.toList())));
         return rows.stream().map(b -> new BookResponse(b.getId(), b.getTitle(), b.getAuthor(), b.getDescription(),
-                b.getIsbn(), membership.getOrDefault(b.getId(), List.of()))).toList();
+                b.getIsbn(), b.getMlBookId(), membership.getOrDefault(b.getId(), List.of()))).toList();
     }
 }

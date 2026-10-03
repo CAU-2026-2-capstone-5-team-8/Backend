@@ -22,5 +22,16 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     long countByTopicIdAndActiveTrue(long topicId);
 
+    List<Question> findByTopicIdAndActiveTrueOrderById(long topicId);
+
+    List<Question> findByActiveTrueOrderById();
+
     Optional<Question> findByGeneratedQuestionId(String generatedQuestionId);
+    @org.springframework.data.jpa.repository.Query(value = """
+            select aq.question_id, count(*) from backend.assessment_question aq
+            join backend.assessment_session s on s.id=aq.session_id
+            join backend.assessment_answer a on a.assessment_question_id=aq.id
+            where s.user_id=:userId and s.topic_id=:topicId group by aq.question_id
+            """, nativeQuery = true)
+    List<Object[]> answeredExposure(long userId, long topicId);
 }

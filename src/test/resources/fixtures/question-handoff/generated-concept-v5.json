@@ -1,0 +1,38 @@
+{
+  "stem": "Find entry (1,1) of [[1,2],[0,1]] squared.",
+  "choices": [
+    "1",
+    "2",
+    "3",
+    "4"
+  ],
+  "correct_choice_index": 0,
+  "explanation": "The entry is 1*1+2*0=1.",
+  "generated_question_id": "gq_3e552798f51796d1cf1c6b4680747826",
+  "generated_question_version": "generated-question-v5",
+  "question_spec_id": "q_05fbaa8474c9225818b2",
+  "topic_id": "linear-algebra",
+  "primary_concept": "matrix",
+  "ability": "application",
+  "cognitive_operation": "apply",
+  "measurement_context": "prior-knowledge",
+  "target_difficulty": 2,
+  "assessment_objective": "Find a product entry.",
+  "evidence_references": [
+    {
+      "book_id": "synthetic",
+      "toc_entry_id": "synthetic-toc"
+    }
+  ],
+  "question_spec_hash": "sha256:f0627c529072af08683881129ea6e138b00bf7b406a47584035d78be9fa0a922",
+  "input_artifact_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "generation_model": "synthetic-provider",
+  "output_language": "en-US",
+  "prompt_version": "concept-question-generation-prompt-v1",
+  "generation_config_version": "concept-question-generation-config-v1",
+  "usage": {
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null
+  }
+}

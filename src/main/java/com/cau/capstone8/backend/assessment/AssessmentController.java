@@ -25,6 +25,13 @@ public class AssessmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(request.userId(), request.topicId()));
     }
 
+    @PostMapping("/concepts")
+    public ResponseEntity<AssessmentResponse> createConceptAssessment(@RequestBody @Valid AssessmentCreateRequest request) {
+        ownership.user(request.userId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.createConceptAssessment(request.userId(), request.topicId()));
+    }
+
     @GetMapping("/{sessionId}")
     public AssessmentResponse get(@PathVariable @Positive long sessionId) {
         return service.get(sessionId);
