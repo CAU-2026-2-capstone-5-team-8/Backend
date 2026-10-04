@@ -13,6 +13,7 @@ public class Book {
     @Column(name = "ml_book_id", length = 200) private String mlBookId;
     @Column(name = "cover_url", length = 2048) private String coverUrl;
     @Column(name = "cover_source_url", length = 2048) private String coverSourceUrl;
+    @Column(name = "updated_at", insertable = false, updatable = false) private java.time.Instant updatedAt;
     protected Book() {}
     public Long getId() { return id; }
     public String getTitle() { return title; }

@@ -12,7 +12,10 @@ import org.springframework.transaction.annotation.*;
 public class BookService {
     private final BookRepository books;
     private final TopicRepository topics;
-    public BookService(BookRepository books, TopicRepository topics) { this.books = books; this.topics = topics; }
+    private final BookMetadataCache metadata;
+    public BookService(BookRepository books, TopicRepository topics, BookMetadataCache metadata) {
+        this.books = books; this.topics = topics; this.metadata = metadata;
+    }
 
     public BookResponse.Page list(Long topicId, int page, int size) {
         if (topicId != null && !topics.existsById(topicId)) throw new ResourceNotFoundException("분야를 찾을 수 없습니다.");
@@ -23,8 +26,13 @@ public class BookService {
     }
 
     public BookResponse detail(long id) {
-        return map(List.of(books.findById(id).orElseThrow(
-                () -> new ResourceNotFoundException("도서를 찾을 수 없습니다.")))).getFirst();
+        var book = metadata.get(id);
+        var memberships = books.findMemberships(List.of(id)).stream()
+                .map(t -> new BookResponse.TopicMembership(t.getTopicId(), t.getCode(), t.getName(),
+                        t.getPrimary(), t.getWeight(), t.getFeatureAvailable(),
+                        t.getTocEntryCount(), t.getRankingCandidate(), t.getCoveredConceptCount())).toList();
+        return new BookResponse(book.id(), book.title(), book.author(), book.description(), book.isbn(),
+                book.mlBookId(), book.coverUrl(), memberships);
     }
 
     private List<BookResponse> map(List<Book> rows) {

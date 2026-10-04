@@ -5,6 +5,9 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface BookRepository extends JpaRepository<Book, Long> {
+    @Query("select b.updatedAt from Book b where b.id = :id")
+    java.util.Optional<java.time.Instant> findMetadataVersion(@Param("id") long id);
+
     // Native LIMIT/OFFSET accepts a long offset, including the largest valid page number.
     @Query(value = """
             SELECT b.* FROM backend.book b

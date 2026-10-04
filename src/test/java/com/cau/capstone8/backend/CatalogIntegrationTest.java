@@ -103,6 +103,50 @@ class CatalogIntegrationTest {
         assertThat(get("/api/books/9223372036854775807").statusCode()).isEqualTo(404);
         assertThat(get("/api/books?topicId=9223372036854775807").statusCode()).isEqualTo(404);
     }
+    @Test void detailRefreshesMetadataAfterDirectSqlCorrection() throws Exception {
+        long id = jdbc.queryForObject("insert into backend.book(title,author,description) values('Before cache','Test author','Test description') returning id", Long.class);
+        try {
+            assertThat(ok("/api/books/" + id).path("title").asString()).isEqualTo("Before cache");
+            jdbc.update("update backend.book set title='After cache',author='Corrected author',description='Corrected description',isbn='cache-test-isbn',ml_book_id='cache-test-ml-id' where id=?", id);
+            var detail = ok("/api/books/" + id);
+            assertThat(detail.path("title").asString()).isEqualTo("After cache");
+            assertThat(detail.path("author").asString()).isEqualTo("Corrected author");
+            assertThat(detail.path("description").asString()).isEqualTo("Corrected description");
+            assertThat(detail.path("isbn").asString()).isEqualTo("cache-test-isbn");
+            assertThat(detail.path("mlBookId").asString()).isEqualTo("cache-test-ml-id");
+            var list = ok("/api/books?size=100").path("content");
+            assertThat(list.toString()).contains("After cache").doesNotContain("Before cache");
+        } finally { jdbc.update("delete from backend.book where id=?", id); }
+    }
+    @Test void detailReturns404ImmediatelyAfterCachedBookIsDeleted() throws Exception {
+        long id = jdbc.queryForObject("insert into backend.book(title,author,description) values('Deleted cache','Author','Description') returning id", Long.class);
+        try {
+            assertThat(ok("/api/books/" + id).path("title").asString()).isEqualTo("Deleted cache");
+            jdbc.update("delete from backend.book where id=?", id);
+            assertThat(get("/api/books/" + id).statusCode()).isEqualTo(404);
+        } finally { jdbc.update("delete from backend.book where id=?", id); }
+    }
+    @Test void detailRefreshesReviewedCoverAdditionAndRemoval() throws Exception {
+        long id = jdbc.queryForObject("insert into backend.book(title,author,description) values('Cover cache','Author','Description') returning id", Long.class);
+        try {
+            assertThat(ok("/api/books/" + id).path("coverUrl").isNull()).isTrue();
+            jdbc.update("update backend.book set cover_url='https://images.example.org/corrected.jpg',cover_source_url='https://publisher.example.org/book',cover_checked_at=now() where id=?", id);
+            assertThat(ok("/api/books/" + id).path("coverUrl").asString()).isEqualTo("https://images.example.org/corrected.jpg");
+            jdbc.update("update backend.book set cover_url=null,cover_source_url=null,cover_checked_at=null where id=?", id);
+            assertThat(ok("/api/books/" + id).path("coverUrl").isNull()).isTrue();
+        } finally { jdbc.update("delete from backend.book where id=?", id); }
+    }
+    @Test void rolledBackSqlCorrectionDoesNotLeakIntoDetail() throws Exception {
+        long id = jdbc.queryForObject("insert into backend.book(title,author,description) values('Committed cache','Author','Description') returning id", Long.class);
+        try {
+            assertThat(ok("/api/books/" + id).path("title").asString()).isEqualTo("Committed cache");
+            new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                jdbc.update("update backend.book set title='Rolled back cache' where id=?", id);
+                status.setRollbackOnly();
+            });
+            assertThat(ok("/api/books/" + id).path("title").asString()).isEqualTo("Committed cache");
+        } finally { jdbc.update("delete from backend.book where id=?", id); }
+    }
     @Test void enforcesFeatureRangeUniquenessAndMembership() {
         long book = book();
         rejects("update backend.book_feature set vocabulary=1.01 where book_id=" + book);
