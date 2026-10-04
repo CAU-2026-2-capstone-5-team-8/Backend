@@ -20,8 +20,10 @@ public class LearningRecommendationController {
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(
             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 200) String key,
+            @RequestParam(defaultValue = "concept-learning-v1")
+            @Pattern(regexp = "concept-learning-v[12]") String modelVersion,
             @RequestBody @Valid Request request) {
-        var created = service.create(request, key);
+        var created = service.create(request, key, modelVersion);
         return created.fresh()
                 ? ResponseEntity.created(URI.create("/api/learning-recommendations/" + created.body().get("id")))
                     .body(created.body())
