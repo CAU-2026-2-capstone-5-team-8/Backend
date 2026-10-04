@@ -30,6 +30,19 @@ class ReadingShelfIntegrationTest {
     }
     String shelf(){return "/api/users/"+user+"/shelf/"+book;}
     String review(){return "/api/users/"+user+"/reviews/"+book;}
+    @Test void missingCoverIsExplicitlyNullOnShelf() throws Exception {
+        assertThat(json.readTree(call("POST",shelf(),null).body()).path("coverUrl").isNull()).isTrue();
+        assertThat(json.readTree(call("GET","/api/users/"+user+"/shelf",null).body())
+                .path("content").get(0).path("coverUrl").isNull()).isTrue();
+    }
+    @Test void shelfReturnsStoredReviewedCover() throws Exception {
+        jdbc.update("update backend.book set cover_url=?,cover_source_url=?,cover_checked_at=now() where id=?",
+                "https://images.example.org/exact-edition.jpg", "https://publisher.example.org/edition", book);
+        assertThat(json.readTree(call("POST",shelf(),null).body()).path("coverUrl").asString())
+                .isEqualTo("https://images.example.org/exact-edition.jpg");
+        assertThat(json.readTree(call("GET","/api/users/"+user+"/shelf",null).body())
+                .path("content").get(0).path("coverUrl").asString()).isEqualTo("https://images.example.org/exact-edition.jpg");
+    }
     @Test void addingAgainDoesNotOverwriteReadingProgressOrNotes() throws Exception {
         assertThat(call("POST",shelf(),null).statusCode()).isEqualTo(200);
         call("PUT",shelf(),"{\"status\":\"READING\",\"note\":\"Keep this\"}");

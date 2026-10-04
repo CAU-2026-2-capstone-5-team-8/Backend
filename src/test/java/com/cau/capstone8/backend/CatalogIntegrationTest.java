@@ -33,6 +33,27 @@ class CatalogIntegrationTest {
     @Autowired com.cau.capstone8.backend.book.DemoCatalogInitializer demo;
     final ObjectMapper json = new ObjectMapper();
 
+    @Test void missingCoversAreExplicitlyNullInListAndDetail() throws Exception {
+        assertThat(ok("/api/books/" + book()).path("coverUrl").isNull()).isTrue();
+        assertThat(ok("/api/books").path("content").get(0).path("coverUrl").isNull()).isTrue();
+    }
+    @Test void returnsOnlyStoredReviewedCoverInListAndDetail() throws Exception {
+        long id = book();
+        jdbc.update("update backend.book set cover_url=?,cover_source_url=?,cover_checked_at=now() where id=?",
+                "https://images.example.org/exact-edition.jpg", "https://publisher.example.org/edition", id);
+        try {
+            assertThat(ok("/api/books/" + id).path("coverUrl").asString()).isEqualTo("https://images.example.org/exact-edition.jpg");
+            assertThat(ok("/api/books").path("content").get(0).path("coverUrl").asString()).isEqualTo("https://images.example.org/exact-edition.jpg");
+        } finally {
+            jdbc.update("update backend.book set cover_url=null,cover_source_url=null,cover_checked_at=null where id=?", id);
+        }
+    }
+    @Test void requiresCompleteHttpsCoverProvenance() {
+        long id = book();
+        rejects("update backend.book set cover_url='https://images.example.org/book.jpg' where id=" + id);
+        rejects("update backend.book set cover_url='javascript:alert(1)',cover_source_url='https://publisher.example.org/book',cover_checked_at=now() where id=" + id);
+        rejects("update backend.book set cover_url='https://images.example.org/book.jpg',cover_source_url='',cover_checked_at=now() where id=" + id);
+    }
     @Test void listsParentAndAssessedTopics() throws Exception {
         var body = ok("/api/topics");
         assertThat(body.size()).isEqualTo(2);
