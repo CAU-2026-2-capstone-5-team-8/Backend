@@ -15,17 +15,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountService {
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwords;
+    private final CredentialThrottle throttle;
     private final String dummyHash;
     private final SecureRandom random = new SecureRandom();
 
-    public AccountService(JdbcTemplate jdbc, PasswordEncoder passwords) {
+    public AccountService(JdbcTemplate jdbc, PasswordEncoder passwords, CredentialThrottle throttle) {
         this.jdbc = jdbc;
         this.passwords = passwords;
+        this.throttle = throttle;
         dummyHash = passwords.encode(UUID.randomUUID().toString());
     }
 
     @Transactional
     public Session register(Register input) {
+        throttle.check(input.email());
         long user = jdbc.queryForObject(
                 "INSERT INTO backend.app_user(display_name) VALUES (?) RETURNING id",
                 Long.class, input.displayName().strip());
@@ -40,6 +43,7 @@ public class AccountService {
 
     @Transactional
     public Session login(Login input) {
+        throttle.check(input.email());
         var rows = jdbc.query("SELECT user_id,password_hash FROM backend.user_account WHERE email=?",
                 (rs,n) -> new Credential(rs.getLong(1), rs.getString(2)), normalize(input.email()));
         String hash = rows.isEmpty() ? dummyHash : rows.getFirst().hash();

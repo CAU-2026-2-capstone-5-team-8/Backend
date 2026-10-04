@@ -21,6 +21,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class ApiExceptionHandler {
     @ExceptionHandler(com.cau.capstone8.backend.account.AccountException.class)
     ResponseEntity<ApiError> account(com.cau.capstone8.backend.account.AccountException ex) {
+        if (ex.status() == 429) return ResponseEntity.status(429).header("Retry-After", "60")
+                .body(new ApiError(ex.code(), ex.getMessage(), UUID.randomUUID().toString()));
         return error(ex.status(), ex.code(), ex.getMessage());
     }
     private static final Logger LOG = LoggerFactory.getLogger(ApiExceptionHandler.class);
