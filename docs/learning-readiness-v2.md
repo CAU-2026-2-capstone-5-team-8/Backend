@@ -32,7 +32,8 @@ No source URL is fetched by the importer or recommendation endpoint.
 Use a new local-catalog-import-v1 manifest/snapshot ID and the new candidate SHA-256
 in a fresh test database. The enrichment changes feature_version to avoid immutable
 identity collision. The existing importer rejects replacing an active projection;
-production activation/transition needs separate approval and implementation. Existing
+explicit selected-book transitions are now available through the developer-only
+[catalog maintenance command](catalog-maintenance.md); preview and confirmation are required. Existing
 catalogs without enriched evidence return empty lists, not fabricated TOC sources.
 
 Verification uses PostgreSQL/Testcontainers, WireMock ML contract responses, immutable
