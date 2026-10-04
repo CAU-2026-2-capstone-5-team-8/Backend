@@ -22,6 +22,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 public class AuthConfiguration {
+    @Bean static org.springframework.beans.factory.config.BeanFactoryPostProcessor productionSafety(
+            org.springframework.core.env.Environment environment) {
+        return beans -> ProductionSafety.validate(environment);
+    }
     @Bean PasswordEncoder passwordEncoder() {
         return new Pbkdf2PasswordEncoder("", 16, 600_000,
                 Pbkdf2PasswordEncoder.SecretKeyFactoryAlgorithm.PBKDF2WithHmacSHA256);
@@ -31,7 +35,7 @@ public class AuthConfiguration {
     }
     @Bean
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-    SecurityFilterChain security(HttpSecurity http, AccountService accounts,
+    SecurityFilterChain security(HttpSecurity http, AccountService accounts, ClientAddress clientAddress,
             @Value("${app.auth.mode:required}") String mode) throws Exception {
         if (!Set.of("required","demo").contains(mode)) throw new IllegalArgumentException("Invalid auth mode");
         // Authentication uses an explicit Authorization header, never ambient cookies/Basic.
@@ -51,7 +55,7 @@ public class AuthConfiguration {
                     if (mode.equals("demo")) a.anyRequest().permitAll();
                     else a.anyRequest().authenticated();
                 })
-                .addFilterBefore(new BearerFilter(accounts), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new BearerFilter(accounts, clientAddress), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
@@ -66,9 +70,13 @@ public class AuthConfiguration {
 
     static class BearerFilter extends OncePerRequestFilter {
         private final AccountService accounts;
-        // Bounded, per-process throttle. Proxy forwarding headers are deliberately not trusted.
+        private final ClientAddress clientAddress;
+        // Bounded, per-process throttle. Trust is explicit and defaults to the socket peer only.
         private final Map<String,Window> attempts = new HashMap<>();
-        BearerFilter(AccountService accounts) { this.accounts=accounts; }
+        BearerFilter(AccountService accounts) { this(accounts, new ClientAddress("")); }
+        BearerFilter(AccountService accounts, ClientAddress clientAddress) {
+            this.accounts=accounts; this.clientAddress=clientAddress;
+        }
         private synchronized boolean allow(String ip) {
             long now = Instant.now().getEpochSecond();
             attempts.entrySet().removeIf(e -> now-e.getValue().start() >= 60);
@@ -83,7 +91,7 @@ public class AuthConfiguration {
             String path=req.getServletPath();
             if (req.getMethod().equals("POST")
                     && (path.equals("/api/auth/login") || path.equals("/api/auth/register"))
-                    && !allow(req.getRemoteAddr())) {
+                    && !allow(clientAddress.resolve(req))) {
                 res.setHeader("Retry-After","60");
                 error(res,429,"AUTH_RATE_LIMIT","요청이 많습니다. 잠시 후 다시 시도해 주세요.");
                 return;
