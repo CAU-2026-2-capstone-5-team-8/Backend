@@ -41,11 +41,19 @@ public class LearningRecommendationService {
 
     @Transactional
     public Created create(LearningRecommendationController.Request request, String key) {
+        return create(request, key, "concept-learning-v1");
+    }
+
+    @Transactional
+    public Created create(LearningRecommendationController.Request request, String key, String modelVersion) {
+        if (!Set.of("concept-learning-v1", "concept-learning-v2").contains(modelVersion))
+            throw new IllegalArgumentException("unsupported learning model");
+        boolean v2 = "concept-learning-v2".equals(modelVersion);
         ownership.user(request.userId());
         // Serialize retries for this user; HTTP has a bounded timeout. A failed call rolls back.
         users.findByIdForUpdate(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("사용자를 찾을 수 없습니다."));
-        String hash = hash(request.toString());
+        String hash = hash(v2 ? modelVersion + "\n" + request : request.toString());
         var prior = runs.findByUserIdAndRequestKey(request.userId(), key);
         if (prior.isPresent()) {
             if (!prior.get().getRequestHash().equals(hash))
@@ -73,10 +81,12 @@ public class LearningRecommendationService {
             if (book == null || book.getMlBookId() == null)
                 throw new RecommendationInputException("도서 개념 연결을 확인하지 못했습니다.");
             canonical.put(book.getMlBookId(), book);
-            wireBooks.add(Map.of("bookId", book.getMlBookId(), "coveredConcepts", candidate.getCoveredConcepts()
+            Map<String, Object> wireBook = new LinkedHashMap<>(Map.of("bookId", book.getMlBookId(), "coveredConcepts", candidate.getCoveredConcepts()
                     .stream().map(c -> c.get("concept")).toList(),
                     "sourceArtifactVersion", candidate.getSourceArtifactVersion(),
                     "sourceArtifactHash", candidate.getSourceArtifactHash()));
+            if (v2) wireBook.put("conceptEvidence", LearningEvidence.fromConcepts(candidate.getCoveredConcepts()));
+            wireBooks.add(wireBook);
         }
         List<Map<String, Object>> observations = new ArrayList<>();
         for (Object item : abilities) {
@@ -87,15 +97,17 @@ public class LearningRecommendationService {
             observations.add(Map.of("conceptId", row.get("conceptId"), "ability", row.get("ability"),
                     "responseCount", row.get("responseCount"), "correctCount", row.get("correctCount")));
         }
-        Map<String, Object> input = Map.of("topicId", topic.getMlTopicId(), "ability", request.ability().name(),
-                "observations", observations, "candidateBooks", wireBooks, "limit", request.topK());
+        Map<String, Object> input = new LinkedHashMap<>(Map.of("topicId", topic.getMlTopicId(), "ability", request.ability().name(),
+                "observations", observations, "candidateBooks", wireBooks, "limit", request.topK()));
+        if (v2) input.put("modelVersion", modelVersion);
         Map<String, Object> result = new LinkedHashMap<>(ml.learningFit(input));
         result.put("conceptProfileVersion", "concept-abilities-v2");
-        if (!"concept-learning-v1".equals(result.get("modelVersion"))
+        if (!modelVersion.equals(result.get("modelVersion"))
                 || !topic.getMlTopicId().equals(result.get("topicId"))
                 || !request.ability().name().equals(result.get("ability"))
                 || !(result.get("items") instanceof List<?> ranked) || ranked.size() > request.topK())
             throw new MlGatewayException("ML_INVALID_RESPONSE", "추천 응답을 확인하지 못했습니다.");
+        if (v2) LearningReadinessValidator.validate(input, result);
         List<Map<String, Object>> mapped = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (Object value : ranked) {

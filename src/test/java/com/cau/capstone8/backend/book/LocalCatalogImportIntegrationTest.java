@@ -62,6 +62,31 @@ class LocalCatalogImportIntegrationTest {
         assertThat(jdbc.queryForObject("select ml_book_id from backend.book where id=?",String.class,first.bookIds().get(idA))).isEqualTo(idA);
     }
 
+    @Test void optionalSourceEvidenceSurvivesImportAndReplay() throws Exception {
+        String evidence = """
+            {"concept_id":"matrix","evidence_id":"fixture-evidence","source_id":"fixture-source",
+             "source_url":"https://example.org/book","evidence_type":"toc_exact","edition_relation":"exact",
+             "toc_path":["Matrices"],"matching_alias":"Matrices","match_method":"normalized_alias_span_v2",
+             "provenance_hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+            """;
+        String enriched = candidate(idA).replace("\"concept\":\"matrix\"", "\"evidence\":[" + evidence.replace("\n", "") + "],\"concept\":\"matrix\"");
+        String conflicting = enriched.replace("\"evidence\":[", "\"evidence\":[" + evidence.replace("\n", "").replace("https://example.org/book", "https://example.org/different") + ",");
+        String acrossConcepts = enriched.replace("\"covered_concepts\":[", "\"covered_concepts\":[{\"concept\":\"vector\",\"weight\":1,\"evidence\":["
+                + evidence.replace("\n", "").replace("\"matrix\"", "\"vector\"").replace("https://example.org/book", "https://example.org/different") + "]},");
+        for (String invalid : List.of(conflicting, acrossConcepts)) {
+            Files.writeString(dir.resolve("candidates.jsonl"), invalid + "\n" + candidate(idB) + "\n");
+            manifest.put("candidates_sha256", hash("candidates.jsonl"));
+            assertThatThrownBy(() -> importer.importManifest(writeManifest())).isInstanceOf(RuntimeException.class);
+            assertThat(jdbc.queryForObject("select count(*) from backend.book", Integer.class)).isZero();
+        }
+        Files.writeString(dir.resolve("candidates.jsonl"), enriched + "\n" + candidate(idB) + "\n");
+        manifest.put("candidates_sha256", hash("candidates.jsonl"));
+        var imported = importer.importManifest(writeManifest());
+        assertThat(importer.importManifest(writeManifest()).replayed()).isTrue();
+        assertThat(jdbc.queryForObject("select covered_concepts::text from backend.book_ranking_v2_projection where id=?",
+                String.class, imported.projectionIds().get(idA))).contains("fixture-evidence", "Matrices", "toc_exact");
+    }
+
     @Test void alteredSnapshotAndSameFeatureVersionNeverOverwrite() throws Exception {
         var first = importer.importManifest(writeManifest());
         Files.writeString(dir.resolve("candidates.jsonl"),candidate(idA).replace("\"matrix\"","\"vector\"")+"\n"+candidate(idB)+"\n");

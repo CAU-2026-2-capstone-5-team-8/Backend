@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.cau.capstone8.backend.learning.LearningEvidence;
+import tools.jackson.databind.JsonNode;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,12 +49,34 @@ public class LocalCatalogImportService {
                                 @JsonProperty("isbn_13") String isbn13, String title,
                                 String subtitle, List<String> authors, String publisher,
                                 Integer publishedYear, String language, List<String> topics) {}
-    public record Concept(String concept, double weight) {}
+    public record Concept(String concept, double weight, List<LearningEvidence> evidence) {
+        public Concept(String concept, double weight) { this(concept, weight, List.of()); }
+        public Concept { evidence = List.copyOf(evidence); }
+
+        // Keep strict old fields while allowing an omitted, additive evidence array.
+        @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+        public static Concept parse(JsonNode node) {
+            require(node.isObject() && node.path("concept").isString() && node.path("weight").isNumber(),
+                    "concept and numeric weight required");
+            node.propertyNames().forEach(name -> require(Set.of("concept", "weight", "evidence").contains(name), "unknown concept field"));
+            List<LearningEvidence> evidence = node.has("evidence")
+                    ? JSON.convertValue(node.path("evidence"), new tools.jackson.core.type.TypeReference<List<LearningEvidence>>() {})
+                    : List.of();
+            require(evidence != null, "evidence must be an array");
+            for (var row : evidence) require(row != null && node.path("concept").asString().equals(row.conceptId()), "evidence concept mismatch");
+            return new Concept(node.path("concept").asString(), node.path("weight").asDouble(), evidence);
+        }
+    }
     public record Candidate(String bookId, Map<String, Double> topicDistribution,
                             List<Concept> coveredConcepts, List<Concept> prerequisiteConcepts,
                             Double lexicalDifficulty, Double syntacticComplexity,
                             Double conceptDensity, Double prerequisiteDemand,
-                            String featureVersion, String configVersion, String configHash) {}
+                            String featureVersion, String configVersion, String configHash) {
+        public Candidate {
+            if (coveredConcepts != null)
+                LearningEvidence.validateIdentities(coveredConcepts.stream().flatMap(c -> c.evidence().stream()).toList());
+        }
+    }
     public record Result(String snapshotId, long topicId, Map<String, Long> bookIds,
                          Map<String, Long> projectionIds, boolean replayed) {}
     public record ProjectionSource(String snapshotId, String candidatesSha256) {}
