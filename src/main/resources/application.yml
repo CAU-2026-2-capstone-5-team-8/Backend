@@ -23,6 +23,7 @@ spring:
     clean-disabled: true
 
 server:
+  forward-headers-strategy: none
   port: ${SERVER_PORT:8080}
   error:
     include-message: never
@@ -41,7 +42,7 @@ management:
 
 ml:
   mode: ${ML_MODE:stub}
-  base-url: ${ML_BASE_URL:http://127.0.0.1:8000}
+  base-url: ${ML_BASE_URL:}
   connect-timeout: ${ML_CONNECT_TIMEOUT:PT2S}
   read-timeout: ${ML_READ_TIMEOUT:PT10S}
 
@@ -51,6 +52,7 @@ assessment:
 app:
   auth:
     mode: ${APP_AUTH_MODE:required}
+    trusted-proxy-cidrs: ${APP_AUTH_TRUSTED_PROXY_CIDRS:}
 
 recommendation:
   processing-lease: ${RECOMMENDATION_PROCESSING_LEASE:PT30S}
