@@ -35,7 +35,10 @@ final class MlProfileHttpContract {
             String conceptId,
             String questionType,
             String difficulty,
-            boolean correct) {
+            boolean correct,
+            String cognitiveOperation,
+            String answerMode,
+            String measurementContext) {
     }
 
     record ProfileResponse(
@@ -50,7 +53,8 @@ final class MlProfileHttpContract {
             Integer responseCount,
             String profileVersion,
             String configVersion,
-            String configHash) {
+            String configHash,
+            Map<String, Object> conceptProfile) {
     }
 
     record DimensionDetail(
@@ -77,7 +81,10 @@ final class MlProfileHttpContract {
                         answer.conceptId(),
                         questionType(answer.measurementArea()),
                         difficultyBand(answer.difficulty()),
-                        answer.correct()))
+                        answer.correct(),
+                        answer.cognitiveOperation(),
+                        answer.answerMode(),
+                        answer.measurementContext()))
                 .toList();
         return new ProfileRequest(
                 request.userId(), request.assessmentId(), request.topicId(), responses);
@@ -140,6 +147,9 @@ final class MlProfileHttpContract {
         evidence.put("configHash", response.configHash());
         evidence.put("dimensionDetails", dimensionDetails);
         evidence.put("conceptReadiness", conceptReadiness);
+        if (response.conceptProfile() != null) {
+            evidence.put("conceptProfile", response.conceptProfile());
+        }
 
         return new MlProfileResult(
                 request.requestId(),

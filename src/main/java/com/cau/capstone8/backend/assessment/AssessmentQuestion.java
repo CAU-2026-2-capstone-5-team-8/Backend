@@ -87,4 +87,21 @@ public class AssessmentQuestion {
     public Map<String, Object> getUpstreamProvenanceSnapshot() {
         return upstreamProvenanceSnapshot == null ? null : Map.copyOf(upstreamProvenanceSnapshot);
     }
+
+    public String getMeasurementContextSnapshot() {
+        if (upstreamProvenanceSnapshot == null) return null;
+        Object context = upstreamProvenanceSnapshot.get("measurementContext");
+        if (context instanceof String value) return value;
+        return switch (versionSnapshot) {
+            case "generated-question-v2" -> "prior-knowledge";
+            case "generated-question-v4" -> "provided-information";
+            default -> null;
+        };
+    }
+
+    public String getCognitiveOperationSnapshot() {
+        Object operation = upstreamProvenanceSnapshot == null
+                ? null : upstreamProvenanceSnapshot.get("cognitiveOperation");
+        return operation instanceof String value ? value : null;
+    }
 }

@@ -14,22 +14,22 @@
 
 ## 이번 구현: 도서 상세 기본 정보 캐시
 
-`GET /api/books/{bookId}`의 ID, 제목, 저자, 설명, ISBN만 불변 record로 캐시한다. JPA 엔티티와 사용자 프로필, 추천 결과, 분야 관계, `featureAvailable`는 캐시하지 않는다. 목록 조회/페이지 수/추천 후보 쿼리는 기존 DB 경로를 유지한다. 도서 상세 응답의 분야 정보는 매번 DB에서 다시 조회하므로 비활성화된 feature나 변경된 분야를 오래 유지하지 않는다.
+2026-10-05 갱신: `GET /api/books/{bookId}`의 ID, 제목, 저자, 설명, ISBN, ML 도서 ID, 검수된 표지 URL을 불변 record로 캐시한다. 표지는 기존 `CoverUrl.reviewed` 검사를 거친 값만 담는다. JPA 엔티티와 사용자 프로필, 추천 결과, 분야 관계, `featureAvailable`, `tocEntryCount`, `rankingCandidate`, `coveredConceptCount`는 캐시하지 않는다. 목록 조회/페이지 수/추천 후보 쿼리는 기존 DB 경로를 유지한다.
 
 | 환경변수 | 기본값 | 의미 |
 | --- | --- | --- |
 | `CATALOG_METADATA_CACHE_ENABLED` | `true` | `false`로 캐시 우회 |
-| `CATALOG_METADATA_CACHE_MAXIMUM_SIZE` | `2000` | 저장 도서 수 상한(바이트 상한 아님) |
+| `CATALOG_METADATA_CACHE_MAXIMUM_SIZE` | `2000` | 저장 메타데이터 버전 수 상한(바이트 상한 아님) |
 | `CATALOG_METADATA_CACHE_TTL` | `PT5M` | 적재 시점부터 만료까지의 기간 |
 
-양수 크기/기간만 허용한다. 같은 ID를 동시에 조회하면 Caffeine의 원자적 적재를 사용하며, 404나 DB 예외는 캐시하지 않는다. 빈도 높은 조회도 TTL을 연장하지 않는다. 만료 후 다음 요청에서 DB를 읽으며 백그라운드 외부 API 갱신 작업은 아니다.
+양수 크기/기간만 허용한다. 같은 `(id, updated_at)` 버전을 동시에 조회하면 Caffeine의 원자적 적재를 사용하며, 404나 DB 예외는 캐시하지 않는다. 빈도 높은 조회도 TTL을 연장하지 않는다. 만료 후 다음 요청에서 다시 적재하며 백그라운드 외부 API 갱신 작업은 아니다.
 
-수정/삭제된 도서의 기본 정보는 TTL 동안 남을 수 있다. 목록과 상세의 기본 정보가 이 시간 동안 다를 수 있다. 즉시 반영이 필요한 배치 변경 시 애플리케이션을 재시작하거나 캐시 비활성 설정으로 재시작한다. 향후 동일 프로세스 도서 수정 API를 추가할 때는 커밋 후 무효화도 함께 구현해야 한다. 여러 서버의 캐시는 서로 동기화하지 않는다.
+매 상세 조회에서 DB의 `updated_at`을 확인하고 해당 버전만 조회한다. 기존 `book_updated` 트리거가 SQL/JdbcTemplate 수정에도 시간을 갱신하므로 JPA 이벤트에 의존하지 않는다. 행이 삭제되면 캐시에 이전 값이 있어도 404를 반환한다. 도서 상세의 기존 REPEATABLE_READ 트랜잭션 안에서 버전과 본문을 읽으며, 이미 시작된 조회는 자기 DB 스냅샷을 유지할 수 있다. 커밋 이후 시작된 조회는 새 버전을 사용한다. 이전 버전은 TTL/크기 제한으로 제거되며 여러 서버도 각자 DB 버전을 확인한다. 이 방식은 기존 PostgreSQL timestamp 정밀도에 의존한다.
 
-캐시 적중 시 기본 정보 DB 조회 한 번을 줄이는 구현이며, 응답 시간 개선율이나 추천 정확도 향상을 실측했다고 주장하지 않는다.
+적중 시 전체 메타데이터 적재를 생략하지만 버전 확인 쿼리는 실행한다. 쿼리 수 감소, 응답 시간 개선율, 추천 정확도 향상은 실측하거나 보장하지 않는다. DB 스키마 변경은 없다.
 
 구현 참고: [Caffeine 원자적 적재](https://github.com/ben-manes/caffeine/wiki/Population), [크기 및 시간 만료 정책](https://github.com/ben-manes/caffeine/wiki/Eviction).
 
 ## 검증 결과
 
-`./gradlew test bootJar --no-daemon --console=plain` 성공. 총 143개 중 140개 통과, 실패/오류 0개, 실제 ML 서버를 지정해야 실행되는 선택 테스트 3개는 skip. 새 캐시 단위 테스트 5개와 상세 캐시/목록 최신성 통합 테스트 1개를 추가했다. 기존 분야 관계·feature 활성 상태 변경 통합 테스트도 통과했다. 테스트 종료 시 이미 종료된 Testcontainers DB에 대한 Hikari 연결 경고는 있었으며 최종 build와 테스트 결과는 성공이다.
+2026-10-05 최신 main(`554badc`) 병합 후 WSL Ubuntu Java 21/PostgreSQL 17.11 Testcontainers에서 `./gradlew clean build --no-daemon --console=plain` 성공. 총 234개 중 227개 통과, 실패/오류 0개, 실제 외부 ML/승인 아티팩트가 필요한 선택 테스트 7개 skip. SQL 메타데이터 수정·삭제·표지 추가 테스트 3개가 기존 캐시에서 실제 실패한 뒤 수정 후 통과했다. 롤백, 표지 제거, 버전별 스냅샷, DB 실패와 기존 분야·feature 최신성까지 카탈로그/캐시 테스트 26개를 확인했다. 종료 중 닫힌 Testcontainers 연결에 대한 Hikari 경고와 기존 컴파일 경고가 있었지만 빌드는 성공했다. 원격 CI는 별도 확인 대상이다.

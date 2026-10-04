@@ -8,6 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +37,14 @@ public class ApprovedQuestionImportService {
                     DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
             .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .build();
+    // grounding_path is optional per entry, so missing creator properties are allowed here.
+    private static final JsonMapper MANIFEST_JSON = JsonMapper.builder()
+            .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+            .enable(
+                    DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                    DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
             .build();
 
     private final QuestionRepository questions;
@@ -89,15 +99,80 @@ public class ApprovedQuestionImportService {
                 groundingJson == null ? null : groundingJson.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Imports every entry listed in an explicit manifest in one transaction. Any rejected entry
+     * rolls back the whole batch. Relative paths resolve against the manifest's directory.
+     */
+    @Transactional
+    public List<ImportResult> importManifest(Path manifestPath) {
+        QuestionImportManifest manifest = parseManifest(manifestPath);
+        Path baseDirectory = manifestPath.toAbsolutePath().getParent();
+        var results = new ArrayList<ImportResult>();
+        for (int index = 0; index < manifest.entries().size(); index++) {
+            QuestionImportManifest.Entry entry = manifest.entries().get(index);
+            try {
+                results.add(importApproved(
+                        Files.readString(baseDirectory.resolve(entry.generatedPath())),
+                        Files.readString(baseDirectory.resolve(entry.reviewsPath())),
+                        entry.groundingPath() == null
+                                ? null
+                                : Files.readAllBytes(baseDirectory.resolve(entry.groundingPath()))));
+            } catch (IOException | QuestionImportException exception) {
+                throw new QuestionImportException(
+                        "manifest entry " + index + " (" + entry.generatedPath() + ") failed: "
+                                + exception.getMessage(),
+                        exception);
+            }
+        }
+        return List.copyOf(results);
+    }
+
+    private QuestionImportManifest parseManifest(Path manifestPath) {
+        QuestionImportManifest manifest;
+        try {
+            manifest = MANIFEST_JSON.readValue(
+                    Files.readAllBytes(manifestPath), QuestionImportManifest.class);
+        } catch (IOException | RuntimeException exception) {
+            throw new QuestionImportException("question import manifest is malformed", exception);
+        }
+        if (!QuestionImportManifest.VERSION.equals(manifest.manifestVersion())) {
+            throw new QuestionImportException(
+                    "manifest_version must be " + QuestionImportManifest.VERSION);
+        }
+        if (manifest.entries() == null || manifest.entries().isEmpty()) {
+            throw new QuestionImportException("manifest entries must not be empty");
+        }
+        var generatedPaths = new HashSet<String>();
+        for (QuestionImportManifest.Entry entry : manifest.entries()) {
+            if (entry == null || blank(entry.generatedPath()) || blank(entry.reviewsPath())
+                    || (entry.groundingPath() != null && entry.groundingPath().isBlank())) {
+                throw new QuestionImportException(
+                        "manifest entries require generated_path and reviews_path");
+            }
+            if (!generatedPaths.add(entry.generatedPath())) {
+                throw new QuestionImportException(
+                        "manifest lists generated_path more than once: " + entry.generatedPath());
+            }
+        }
+        return manifest;
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.isBlank();
+    }
+
     private ImportResult importApproved(
             String generatedQuestionJson,
             String reviewsJsonl,
             byte[] groundingBytes) {
         GeneratedQuestionHandoff generated = parseGeneratedQuestion(generatedQuestionJson);
         GenerationGroundingV2Handoff grounding = validateGrounding(generated, groundingBytes);
-        HumanQuestionReviewHandoff review = matchingReview(
+        ParsedReview review = matchingReview(
                 reviewsJsonl, generated.generatedQuestionId());
-        requireApproval(review);
+        requireApproval(review.judgment());
+        if (review.ai() != null && !(generated instanceof GeneratedQuestionV5Handoff)) {
+            throw new QuestionImportException("AI content reviews currently support only generated-question-v5");
+        }
 
         String contentHash = contentHash(generated);
         var existing = questions.findByGeneratedQuestionId(generated.generatedQuestionId());
@@ -113,7 +188,16 @@ public class ApprovedQuestionImportService {
                 .orElseThrow(() -> new QuestionImportException(
                         "no Backend topic matches generated topic_id: " + generated.topicId()));
         Map<String, Object> provenance = new LinkedHashMap<>(generated.provenance());
-        provenance.put("humanReview", reviewProvenance(review));
+        Map<String, Object> reviewMetadata = new LinkedHashMap<>(reviewProvenance(review.judgment()));
+        if (review.ai() == null) {
+            provenance.put("humanReview", reviewMetadata);
+        } else {
+            reviewMetadata.put("reviewVersion", review.ai().reviewVersion());
+            reviewMetadata.put("reviewerType", review.ai().reviewerType());
+            reviewMetadata.put("reviewerName", review.ai().reviewerName());
+            reviewMetadata.put("validationScope", review.ai().validationScope());
+            provenance.put("aiReview", reviewMetadata);
+        }
         if (grounding != null) {
             provenance.put("groundingSource", grounding.safeSourceProvenance());
         }
@@ -135,7 +219,7 @@ public class ApprovedQuestionImportService {
         return new ImportResult(saved.getId(), generated.generatedQuestionId(), true);
     }
 
-    private GeneratedQuestionHandoff parseGeneratedQuestion(String json) {
+    GeneratedQuestionHandoff parseGeneratedQuestion(String json) {
         try {
             JsonNode root = JSON.readTree(json);
             JsonNode versionNode = root == null ? null : root.get("generated_question_version");
@@ -147,11 +231,14 @@ public class ApprovedQuestionImportService {
                         root, GeneratedQuestionV2Handoff.class);
                 case "generated-question-v4" -> JSON.treeToValue(
                         root, GeneratedQuestionV4Handoff.class);
+                case "generated-question-v5" -> JSON.treeToValue(
+                        root, GeneratedQuestionV5Handoff.class);
                 default -> throw new QuestionImportException(
                         "unsupported generated_question_version");
             };
-            if (generated instanceof GeneratedQuestionV4Handoff v4) {
-                validateV4GeneratedId(v4);
+            if (generated instanceof GeneratedQuestionV4Handoff
+                    || generated instanceof GeneratedQuestionV5Handoff) {
+                validateContentGeneratedId(generated);
             }
             return generated;
         } catch (QuestionImportException exception) {
@@ -164,10 +251,11 @@ public class ApprovedQuestionImportService {
     private GenerationGroundingV2Handoff validateGrounding(
             GeneratedQuestionHandoff generated,
             byte[] groundingBytes) {
-        if (generated instanceof GeneratedQuestionV2Handoff) {
+        if (generated instanceof GeneratedQuestionV2Handoff
+                || generated instanceof GeneratedQuestionV5Handoff) {
             if (groundingBytes != null) {
                 throw new QuestionImportException(
-                        "generated-question-v2 must not include a grounding artifact");
+                        "this question version must not include a grounding artifact");
             }
             return null;
         }
@@ -214,7 +302,7 @@ public class ApprovedQuestionImportService {
         return grounding;
     }
 
-    private void validateV4GeneratedId(GeneratedQuestionV4Handoff generated) {
+    private void validateContentGeneratedId(GeneratedQuestionHandoff generated) {
         Map<String, Object> identityAndOutput = new TreeMap<>(
                 JSON.convertValue(generated, OBJECT_MAP));
         identityAndOutput.remove("generated_question_id");
@@ -223,7 +311,7 @@ public class ApprovedQuestionImportService {
                 .substring(0, 32);
         if (!expected.equals(generated.generatedQuestionId())) {
             throw new QuestionImportException(
-                    "generated_question_id does not match v4 identity and output");
+                    "generated_question_id does not match identity and output");
         }
     }
 
@@ -234,30 +322,41 @@ public class ApprovedQuestionImportService {
         }
     }
 
-    private HumanQuestionReviewHandoff matchingReview(String jsonl, String generatedQuestionId) {
-        List<HumanQuestionReviewHandoff> matching;
+    private record ParsedReview(QuestionReviewJudgment judgment, AiQuestionReviewHandoff ai) {}
+
+    private ParsedReview parseReview(String line) {
+        JsonNode tree = JSON.readTree(line);
+        if (tree.has("review_version") || tree.has("reviewer_type") || tree.has("review")) {
+            AiQuestionReviewHandoff ai = JSON.readValue(line, AiQuestionReviewHandoff.class);
+            return new ParsedReview(ai.review(), ai);
+        }
+        return new ParsedReview(JSON.readValue(line, QuestionReviewJudgment.class), null);
+    }
+
+    private ParsedReview matchingReview(String jsonl, String generatedQuestionId) {
+        List<ParsedReview> matching;
         try {
             matching = jsonl.lines()
                     .filter(line -> !line.isBlank())
-                    .map(line -> JSON.readValue(line, HumanQuestionReviewHandoff.class))
-                    .filter(review -> review.generatedQuestionId().equals(generatedQuestionId))
+                    .map(this::parseReview)
+                    .filter(review -> review.judgment().generatedQuestionId().equals(generatedQuestionId))
                     .toList();
         } catch (QuestionImportException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw new QuestionImportException("HumanQuestionReview JSONL is malformed", exception);
+            throw new QuestionImportException("question review JSONL is malformed", exception);
         }
         if (matching.size() != 1) {
             throw new QuestionImportException(
-                    "exactly one matching HumanQuestionReview is required");
+                    "exactly one matching question review is required");
         }
         return matching.getFirst();
     }
 
-    private void requireApproval(HumanQuestionReviewHandoff review) {
+    private void requireApproval(QuestionReviewJudgment review) {
         if (!"approve".equals(review.status()) || !review.correct()) {
             throw new QuestionImportException(
-                    "only HumanQuestionReview status=approve and correct=true may be imported");
+                    "only question review status=approve and correct=true may be imported");
         }
     }
 
@@ -280,7 +379,7 @@ public class ApprovedQuestionImportService {
         }
     }
 
-    private Map<String, Object> reviewProvenance(HumanQuestionReviewHandoff review) {
+    private Map<String, Object> reviewProvenance(QuestionReviewJudgment review) {
         return Map.of(
                 "status", review.status(),
                 "correct", review.correct(),

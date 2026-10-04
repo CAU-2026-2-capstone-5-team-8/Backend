@@ -5,13 +5,19 @@ import static org.mockito.Mockito.*;
 
 import com.cau.capstone8.backend.common.error.ResourceNotFoundException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 
 class BookMetadataCacheTest {
     final BookRepository repository = mock(BookRepository.class);
     final AtomicLong clock = new AtomicLong();
+
+    @BeforeEach void existingVersion() {
+        when(repository.findMetadataVersion(anyLong())).thenReturn(Optional.of(Instant.EPOCH));
+    }
 
     Book book(long id, String title) {
         Book book = mock(Book.class);
@@ -44,6 +50,31 @@ class BookMetadataCacheTest {
         var cache = new BookMetadataCache(repository, false, 10, Duration.ofMinutes(5), clock::get);
         assertThat(cache.get(1).title()).isEqualTo("One");
         assertThat(cache.get(1).title()).isEqualTo("Two");
+        verify(repository, never()).findMetadataVersion(anyLong());
+    }
+
+    @Test void olderSnapshotCannotReplaceNewerCachedVersion() {
+        var old = book(1, "Old snapshot");
+        var current = book(1, "Current snapshot");
+        when(repository.findMetadataVersion(1L)).thenReturn(Optional.of(Instant.EPOCH.plusSeconds(1)),
+                Optional.of(Instant.EPOCH), Optional.of(Instant.EPOCH.plusSeconds(1)));
+        when(repository.findById(1L)).thenReturn(Optional.of(current), Optional.of(old));
+        var cache = new BookMetadataCache(repository, true, 10, Duration.ofMinutes(5), clock::get);
+        assertThat(cache.get(1).title()).isEqualTo("Current snapshot");
+        assertThat(cache.get(1).title()).isEqualTo("Old snapshot");
+        assertThat(cache.get(1).title()).isEqualTo("Current snapshot");
+        verify(repository, times(2)).findById(1L);
+    }
+
+    @Test void cachedMetadataDoesNotHideVersionLookupFailureOrDeletion() {
+        var row = book(1, "Cached");
+        when(repository.findById(1L)).thenReturn(Optional.of(row));
+        when(repository.findMetadataVersion(1L)).thenReturn(Optional.of(Instant.EPOCH))
+                .thenThrow(new IllegalStateException("DB unavailable")).thenReturn(Optional.empty());
+        var cache = new BookMetadataCache(repository, true, 10, Duration.ofMinutes(5), clock::get);
+        assertThat(cache.get(1).title()).isEqualTo("Cached");
+        assertThatThrownBy(() -> cache.get(1)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> cache.get(1)).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test void missingBooksAndDatabaseFailuresAreNotCached() {

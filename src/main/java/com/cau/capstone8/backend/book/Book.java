@@ -11,6 +11,9 @@ public class Book {
     @Column(nullable = false, columnDefinition = "text") private String description;
     @Column(length = 20) private String isbn;
     @Column(name = "ml_book_id", length = 200) private String mlBookId;
+    @Column(name = "cover_url", length = 2048) private String coverUrl;
+    @Column(name = "cover_source_url", length = 2048) private String coverSourceUrl;
+    @Column(name = "updated_at", insertable = false, updatable = false) private java.time.Instant updatedAt;
     protected Book() {}
     public Long getId() { return id; }
     public String getTitle() { return title; }
@@ -18,4 +21,5 @@ public class Book {
     public String getDescription() { return description; }
     public String getIsbn() { return isbn; }
     public String getMlBookId() { return mlBookId; }
+    public String getCoverUrl() { return CoverUrl.reviewed(coverUrl, coverSourceUrl); }
 }

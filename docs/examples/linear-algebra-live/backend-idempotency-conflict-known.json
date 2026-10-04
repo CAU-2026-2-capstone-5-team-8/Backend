@@ -1,0 +1,19 @@
+{
+  "method": "POST",
+  "url": "http://127.0.0.1:8087/api/recommendations",
+  "requestHeaders": {
+    "Idempotency-Key": "la-live-verification-session-2"
+  },
+  "request": {
+    "userId": 1,
+    "topicId": 2,
+    "challengeLevel": "BALANCED",
+    "topK": 4
+  },
+  "status": 409,
+  "response": {
+    "code": "RECOMMENDATION_CONFLICT",
+    "message": "같은 멱등성 키에 다른 추천 요청을 사용할 수 없습니다.",
+    "traceId": "0750c3d0-883c-4e1c-b73a-c43996a96982"
+  }
+}

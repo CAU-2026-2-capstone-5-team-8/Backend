@@ -45,13 +45,41 @@ public record MlProfileRequest(
             String conceptId,
             int difficulty,
             boolean correct,
-            double points) {
+            double points,
+            String cognitiveOperation,
+            String answerMode,
+            String measurementContext) {
+
+        public Answer(String questionId, MeasurementArea measurementArea, String conceptId,
+                      int difficulty, boolean correct, double points) {
+            this(questionId, measurementArea, conceptId, difficulty, correct, points, null, null, null);
+        }
+
+        public Answer(String questionId, MeasurementArea measurementArea, String conceptId,
+                      int difficulty, boolean correct, double points,
+                      String cognitiveOperation, String answerMode) {
+            this(questionId, measurementArea, conceptId, difficulty, correct, points,
+                    cognitiveOperation, answerMode, null);
+        }
 
         public Answer {
             if (questionId == null || questionId.isBlank() || measurementArea == null
                     || (conceptId != null && conceptId.isBlank())
                     || difficulty < 1 || difficulty > 5 || !Double.isFinite(points) || points <= 0) {
                 throw new IllegalArgumentException("invalid ML profile answer");
+            }
+            if (cognitiveOperation != null && !java.util.Set.of(
+                    "recognize", "recall", "compare", "relate", "apply", "integrate", "infer")
+                    .contains(cognitiveOperation)) {
+                throw new IllegalArgumentException("unsupported cognitive operation");
+            }
+            if (measurementContext != null && !java.util.Set.of(
+                    "prior-knowledge", "provided-information").contains(measurementContext)) {
+                throw new IllegalArgumentException("unsupported measurement context");
+            }
+            if (answerMode != null && !java.util.Set.of("MULTIPLE_CHOICE", "SELF_REPORT")
+                    .contains(answerMode)) {
+                throw new IllegalArgumentException("unsupported answer mode");
             }
         }
     }

@@ -19,17 +19,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class RecommendationController {
     private final RecommendationService recommendations;
     private final FeedbackService feedback;
+    private final com.cau.capstone8.backend.account.AccountOwnership ownership;
 
     public RecommendationController(
-            RecommendationService recommendations, FeedbackService feedback) {
+            RecommendationService recommendations, FeedbackService feedback,
+            com.cau.capstone8.backend.account.AccountOwnership ownership) {
         this.recommendations = recommendations;
         this.feedback = feedback;
+        this.ownership = ownership;
     }
 
     @PostMapping
     public ResponseEntity<RecommendationResponse> create(
             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 200) String requestKey,
             @RequestBody @Valid RecommendationCreateRequest request) {
+        ownership.user(request.userId());
         RecommendationService.Created created = recommendations.create(request, requestKey);
         if (!created.newlyCreated()) {
             return ResponseEntity.ok(created.response());
@@ -47,6 +51,7 @@ public class RecommendationController {
     public ResponseEntity<FeedbackResponse> feedback(
             @PathVariable @Positive long itemId,
             @RequestBody @Valid FeedbackRequest request) {
+        ownership.user(request.userId());
         FeedbackService.Saved saved = feedback.save(itemId, request);
         if (!saved.newlyCreated()) {
             return ResponseEntity.ok(saved.response());

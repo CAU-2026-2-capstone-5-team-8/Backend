@@ -1,0 +1,111 @@
+{
+  "method": "POST",
+  "url": "http://127.0.0.1:8087/api/assessments/2/complete",
+  "requestHeaders": {},
+  "request": null,
+  "status": 200,
+  "response": {
+    "id": 2,
+    "userId": 1,
+    "topicId": 2,
+    "status": "COMPLETED",
+    "profile": {
+      "id": 2,
+      "sessionId": 2,
+      "userId": 1,
+      "topicId": 2,
+      "vocabulary": 1.0,
+      "backgroundKnowledge": 1.0,
+      "comprehension": 1.0,
+      "calculationVersion": "reader-v1",
+      "evidence": {
+        "profileVersion": "reader-v1",
+        "conceptReadiness": [
+          {
+            "conceptId": "basis",
+            "score": 1.0,
+            "responseCount": 1,
+            "earnedWeight": 1.0,
+            "availableWeight": 1.0
+          },
+          {
+            "conceptId": "eigenvalue",
+            "score": 1.0,
+            "responseCount": 1,
+            "earnedWeight": 1.0,
+            "availableWeight": 1.0
+          },
+          {
+            "conceptId": "high school algebra",
+            "score": 1.0,
+            "responseCount": 1,
+            "earnedWeight": 1.0,
+            "availableWeight": 1.0
+          },
+          {
+            "conceptId": "linear system",
+            "score": 1.0,
+            "responseCount": 1,
+            "earnedWeight": 1.0,
+            "availableWeight": 1.0
+          },
+          {
+            "conceptId": "matrix",
+            "score": 1.0,
+            "responseCount": 2,
+            "earnedWeight": 2.0,
+            "availableWeight": 2.0
+          },
+          {
+            "conceptId": "systems of equations",
+            "score": 1.0,
+            "responseCount": 1,
+            "earnedWeight": 1.0,
+            "availableWeight": 1.0
+          },
+          {
+            "conceptId": "vector",
+            "score": 1.0,
+            "responseCount": 1,
+            "earnedWeight": 1.0,
+            "availableWeight": 1.0
+          },
+          {
+            "conceptId": "vector space",
+            "score": 1.0,
+            "responseCount": 1,
+            "earnedWeight": 1.0,
+            "availableWeight": 1.0
+          }
+        ],
+        "dimensionDetails": [
+          {
+            "questionType": "vocabulary",
+            "score": 1.0,
+            "responseCount": 3,
+            "earnedWeight": 3.0,
+            "availableWeight": 3.0
+          },
+          {
+            "questionType": "background_knowledge",
+            "score": 1.0,
+            "responseCount": 3,
+            "earnedWeight": 3.0,
+            "availableWeight": 3.0
+          },
+          {
+            "questionType": "comprehension",
+            "score": 1.0,
+            "responseCount": 3,
+            "earnedWeight": 3.0,
+            "availableWeight": 3.0
+          }
+        ],
+        "configHash": "sha256:9bc1cfbc18eddb39582d7697626269cd11203bec74e2be676a5495b8f91fb73b",
+        "configVersion": "reader-config-v1",
+        "method": "ml-http-reader-profile"
+      },
+      "completedAt": "2026-10-01T06:17:19.287167Z"
+    }
+  }
+}

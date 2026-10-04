@@ -10,7 +10,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 sealed interface GeneratedQuestionHandoff
-        permits GeneratedQuestionV2Handoff, GeneratedQuestionV4Handoff {
+        permits GeneratedQuestionV2Handoff, GeneratedQuestionV4Handoff, GeneratedQuestionV5Handoff {
     String generatedQuestionId();
 
     String generatedQuestionVersion();

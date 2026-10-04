@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Ticker;
 import java.time.Duration;
+import java.time.Instant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -14,7 +15,7 @@ import org.springframework.stereotype.Component;
 public class BookMetadataCache {
     private final BookRepository books;
     private final boolean enabled;
-    private final Cache<Long, Metadata> cache;
+    private final Cache<Version, Metadata> cache;
 
     @Autowired
     public BookMetadataCache(BookRepository books,
@@ -34,13 +35,22 @@ public class BookMetadataCache {
     }
 
     public Metadata get(long id) {
-        return enabled ? cache.get(id, this::load) : load(id);
+        if (!enabled) return load(id);
+        // BookService's REPEATABLE_READ transaction keeps the version and row in one snapshot.
+        // The database trigger covers direct SQL writers as well as application writes.
+        Instant updatedAt = books.findMetadataVersion(id)
+                .orElseThrow(() -> new ResourceNotFoundException("도서를 찾을 수 없습니다."));
+        return cache.get(new Version(id, updatedAt), version -> load(version.id()));
     }
+
+    private record Version(long id, Instant updatedAt) {}
 
     private Metadata load(long id) {
         Book book = books.findById(id).orElseThrow(() -> new ResourceNotFoundException("도서를 찾을 수 없습니다."));
-        return new Metadata(book.getId(), book.getTitle(), book.getAuthor(), book.getDescription(), book.getIsbn());
+        return new Metadata(book.getId(), book.getTitle(), book.getAuthor(), book.getDescription(), book.getIsbn(),
+                book.getMlBookId(), book.getCoverUrl());
     }
 
-    public record Metadata(long id, String title, String author, String description, String isbn) {}
+    public record Metadata(long id, String title, String author, String description, String isbn,
+                           String mlBookId, String coverUrl) {}
 }

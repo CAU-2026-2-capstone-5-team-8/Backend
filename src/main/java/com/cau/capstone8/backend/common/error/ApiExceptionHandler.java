@@ -19,6 +19,10 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(com.cau.capstone8.backend.account.AccountException.class)
+    ResponseEntity<ApiError> account(com.cau.capstone8.backend.account.AccountException ex) {
+        return error(ex.status(), ex.code(), ex.getMessage());
+    }
     private static final Logger LOG = LoggerFactory.getLogger(ApiExceptionHandler.class);
     public record ApiError(String code, String message, String traceId) {}
 
@@ -60,7 +64,8 @@ public class ApiExceptionHandler {
         return error(ex.getHttpStatus(), ex.getFailureCode(), ex.getMessage());
     }
     @ExceptionHandler({HandlerMethodValidationException.class, MethodArgumentTypeMismatchException.class,
-            MissingServletRequestParameterException.class})
+            MissingServletRequestParameterException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class})
     ResponseEntity<ApiError> invalid(Exception ex) {
         return error(400, "INVALID_REQUEST", "요청 값의 형식과 범위를 확인해 주세요.");
     }
