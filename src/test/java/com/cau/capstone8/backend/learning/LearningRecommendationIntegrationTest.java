@@ -146,6 +146,19 @@ class LearningRecommendationIntegrationTest {
         assertThat(jdbc.queryForObject("select count(*) from backend.learning_recommendation where user_id=?", Integer.class, user)).isZero();
     }
 
+    @Test void invalidV2ResponseCanBeRetriedWithTheSameKey() throws Exception {
+        String key = UUID.randomUUID().toString();
+        ML.stubFor(post("/ml/learning-fit").willReturn(okJson(v2Result(null).replace("\"correctCount\":1", "\"correctCount\":0"))));
+        assertThat(postJson(key, request("application"), "?modelVersion=concept-learning-v2").statusCode()).isEqualTo(502);
+        ML.stubFor(post("/ml/learning-fit").willReturn(okJson(v2Result(null))));
+        var created = postJson(key, request("application"), "?modelVersion=concept-learning-v2");
+        assertThat(created.statusCode()).withFailMessage(created.body()).isEqualTo(201);
+        var replay = postJson(key, request("application"), "?modelVersion=concept-learning-v2");
+        assertThat(replay.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(replay.body())).isEqualTo(json.readTree(created.body()));
+        ML.verify(2, postRequestedFor(urlEqualTo("/ml/learning-fit")));
+    }
+
     String v2Result(String evidence) {
         String checklist = """
             {"version":"reading-checklist-v2","interpretation":"observed_answers_not_calibrated_mastery",
