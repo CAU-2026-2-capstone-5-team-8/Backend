@@ -2,7 +2,7 @@ package com.cau.capstone8.backend.book;
 
 import java.util.List;
 
-public record BookResponse(long id, String title, String author, String description, String isbn, String mlBookId,
+public record BookResponse(long id, String title, String author, String description, String isbn, String mlBookId, String coverUrl,
                            List<TopicMembership> topics) {
     public record TopicMembership(long id, String code, String name, boolean primary,
                                   double weight, boolean featureAvailable, Integer tocEntryCount,

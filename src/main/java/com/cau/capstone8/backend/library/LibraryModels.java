@@ -10,7 +10,7 @@ public final class LibraryModels {
     public record ShelfRequest(@NotNull ReadingStatus status, @NotNull @Size(max=1000) String note) {}
     public record ReviewRequest(@NotNull Difficulty difficulty, @NotBlank @Size(max=300) String text) {}
     public record OwnReview(Difficulty difficulty, String text) {}
-    public record ShelfEntry(long bookId, String title, String author, ReadingStatus status,
+    public record ShelfEntry(long bookId, String title, String author, String coverUrl, ReadingStatus status,
                              String note, String updatedAt, OwnReview review) {}
     public record PublicReview(String authorLabel, Difficulty difficulty, String text, String updatedAt) {}
     public record Page<T>(List<T> content, int page, int size, long totalElements, long totalPages) {}

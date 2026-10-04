@@ -35,6 +35,6 @@ public class BookService {
                                 t.getName(), t.getPrimary(), t.getWeight(), t.getFeatureAvailable(),
                                 t.getTocEntryCount(), t.getRankingCandidate(), t.getCoveredConceptCount()), Collectors.toList())));
         return rows.stream().map(b -> new BookResponse(b.getId(), b.getTitle(), b.getAuthor(), b.getDescription(),
-                b.getIsbn(), b.getMlBookId(), membership.getOrDefault(b.getId(), List.of()))).toList();
+                b.getIsbn(), b.getMlBookId(), b.getCoverUrl(), membership.getOrDefault(b.getId(), List.of()))).toList();
     }
 }

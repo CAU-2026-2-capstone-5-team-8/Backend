@@ -1,5 +1,8 @@
 # CAU 캡스톤디자인 8조 Backend
 
+도서 목록·상세·내 서재 응답은 검토된 표지가 있을 때만 `coverUrl`을 반환하며, 없으면 `null`입니다.
+출처·판본 확인과 관리자 입력 절차는 [표지 메타데이터 안내](docs/catalog-covers.md)를 참고하세요.
+
 이 브랜치는 이메일·비밀번호 계정과 독서 준비도 마이페이지 API를 추가합니다.
 기본 실행은 인증 필수이며, 회원가입/로그인 후 받은 토큰을 `Authorization: Bearer <token>`으로 전송합니다.
 `GET/PUT /api/me`, `GET /api/me/readiness`, 분야별 `history`와 `diagnostics`를 제공합니다.
