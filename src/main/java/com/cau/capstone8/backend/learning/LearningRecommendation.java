@@ -2,6 +2,8 @@ package com.cau.capstone8.backend.learning;
 
 import jakarta.persistence.*;
 import java.util.Map;
+import java.util.UUID;
+import java.time.OffsetDateTime;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -19,6 +21,9 @@ public class LearningRecommendation {
     private Map<String, Object> inputSnapshot;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb") private Map<String, Object> result;
+    @Column(nullable = false, length = 20) private String status = "SUCCEEDED";
+    @Column(name = "attempt_id") private UUID attemptId;
+    @Column(name = "processing_expires_at") private OffsetDateTime processingExpiresAt;
 
     protected LearningRecommendation() {}
     public LearningRecommendation(long userId, long topicId, long profileId, String requestKey,
@@ -30,6 +35,27 @@ public class LearningRecommendation {
         this.requestHash = requestHash;
         this.inputSnapshot = Map.copyOf(inputSnapshot);
         this.result = Map.copyOf(result);
+    }
+    public static LearningRecommendation processing(long userId, long topicId, long profileId,
+            String requestKey, String requestHash, Map<String, Object> inputSnapshot,
+            UUID attemptId, OffsetDateTime expiresAt) {
+        var run = new LearningRecommendation(userId, topicId, profileId, requestKey, requestHash,
+                inputSnapshot, Map.of());
+        run.status = "PROCESSING";
+        run.attemptId = attemptId;
+        run.processingExpiresAt = expiresAt;
+        return run;
+    }
+    public boolean isProcessing() { return "PROCESSING".equals(status); }
+    public boolean ownsAttempt(UUID attempt) { return isProcessing() && attempt.equals(attemptId); }
+    public boolean hasActiveLease(OffsetDateTime now) {
+        return isProcessing() && processingExpiresAt.isAfter(now);
+    }
+    public void succeed(Map<String, Object> result) {
+        this.result = Map.copyOf(result);
+        this.status = "SUCCEEDED";
+        this.attemptId = null;
+        this.processingExpiresAt = null;
     }
     public Long getId() { return id; }
     public Long getUserId() { return userId; }

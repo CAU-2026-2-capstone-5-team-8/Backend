@@ -11,14 +11,24 @@ import com.cau.capstone8.backend.user.AppUserRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class LearningRecommendationService {
+    private static final Logger LOG = LoggerFactory.getLogger(LearningRecommendationService.class);
     private final com.cau.capstone8.backend.account.AccountOwnership ownership;
     private final LearningRecommendationRepository runs;
     private final ReaderProfileRepository profiles;
@@ -27,38 +37,66 @@ public class LearningRecommendationService {
     private final TopicRepository topics;
     private final AppUserRepository users;
     private final MlGateway ml;
+    private final TransactionTemplate transactions;
+    private final Duration processingLease;
 
     public LearningRecommendationService(LearningRecommendationRepository runs, ReaderProfileRepository profiles,
             BookRankingV2ProjectionRepository projections, BookRepository books, TopicRepository topics,
             AppUserRepository users, MlGateway ml,
-            com.cau.capstone8.backend.account.AccountOwnership ownership) {
+            com.cau.capstone8.backend.account.AccountOwnership ownership,
+            PlatformTransactionManager transactionManager,
+            @Value("${recommendation.processing-lease:PT30S}") Duration processingLease) {
         this.runs = runs; this.profiles = profiles; this.projections = projections;
         this.books = books; this.topics = topics; this.users = users; this.ml = ml;
         this.ownership = ownership;
+        this.transactions = new TransactionTemplate(transactionManager);
+        if (processingLease.isZero() || processingLease.isNegative())
+            throw new IllegalArgumentException("recommendation processing lease must be positive");
+        this.processingLease = processingLease;
     }
 
     public record Created(Map<String, Object> body, boolean fresh) {}
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Created create(LearningRecommendationController.Request request, String key) {
         return create(request, key, "concept-learning-v1");
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Created create(LearningRecommendationController.Request request, String key, String modelVersion) {
         if (!Set.of("concept-learning-v1", "concept-learning-v2").contains(modelVersion))
             throw new IllegalArgumentException("unsupported learning model");
-        boolean v2 = "concept-learning-v2".equals(modelVersion);
         ownership.user(request.userId());
-        // Serialize retries for this user; HTTP has a bounded timeout. A failed call rolls back.
+        Claim claim = Objects.requireNonNull(transactions.execute(status -> claim(request, key, modelVersion)));
+        if (claim.existing() != null) return new Created(claim.existing(), false);
+        try {
+            Map<String, Object> result = calculate(claim, request, modelVersion);
+            return Objects.requireNonNull(transactions.execute(status -> finish(claim, result)));
+        } catch (RuntimeException exception) {
+            recover(claim);
+            throw exception;
+        }
+    }
+
+    private Claim claim(LearningRecommendationController.Request request, String key, String modelVersion) {
+        boolean v2 = "concept-learning-v2".equals(modelVersion);
+        // Serialize creation of a user's keys only until the input and lease are committed.
         users.findByIdForUpdate(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("사용자를 찾을 수 없습니다."));
         String hash = hash(v2 ? modelVersion + "\n" + request : request.toString());
         var prior = runs.findByUserIdAndRequestKey(request.userId(), key);
         if (prior.isPresent()) {
-            if (!prior.get().getRequestHash().equals(hash))
-                throw new RecommendationConflictException("같은 키로 다른 추천을 요청할 수 없습니다.");
-            return new Created(response(prior.get()), false);
+            var existing = prior.get();
+            if (!existing.isProcessing() || existing.hasActiveLease(now())) {
+                if (!existing.getRequestHash().equals(hash))
+                    throw new RecommendationConflictException("같은 키로 다른 추천을 요청할 수 없습니다.");
+                if (existing.isProcessing())
+                    throw new RecommendationConflictException("추천 처리가 이미 진행 중입니다.");
+                return new Claim(existing.getId(), null, null, null, response(existing));
+            }
+            // An expired calculation has the same retry semantics as a rolled-back failure.
+            runs.delete(existing);
+            runs.flush();
         }
         var topic = topics.findById(request.topicId())
                 .orElseThrow(() -> new ResourceNotFoundException("분야를 찾을 수 없습니다."));
@@ -74,13 +112,13 @@ public class LearningRecommendationService {
         if (candidates.isEmpty()) throw new RecommendationInputException("개념 분석 자료가 아직 없습니다.");
         Map<Long, Book> catalog = books.findAllById(candidates.stream().map(BookRankingV2Projection::getBookId).toList())
                 .stream().collect(Collectors.toMap(Book::getId, Function.identity()));
-        Map<String, Book> canonical = new HashMap<>();
+        Map<String, DisplayBook> canonical = new HashMap<>();
         List<Map<String, Object>> wireBooks = new ArrayList<>();
         for (var candidate : candidates) {
             Book book = catalog.get(candidate.getBookId());
             if (book == null || book.getMlBookId() == null)
                 throw new RecommendationInputException("도서 개념 연결을 확인하지 못했습니다.");
-            canonical.put(book.getMlBookId(), book);
+            canonical.put(book.getMlBookId(), new DisplayBook(book.getId(), book.getTitle(), book.getAuthor()));
             Map<String, Object> wireBook = new LinkedHashMap<>(Map.of("bookId", book.getMlBookId(), "coveredConcepts", candidate.getCoveredConcepts()
                     .stream().map(c -> c.get("concept")).toList(),
                     "sourceArtifactVersion", candidate.getSourceArtifactVersion(),
@@ -100,14 +138,24 @@ public class LearningRecommendationService {
         Map<String, Object> input = new LinkedHashMap<>(Map.of("topicId", topic.getMlTopicId(), "ability", request.ability().name(),
                 "observations", observations, "candidateBooks", wireBooks, "limit", request.topK()));
         if (v2) input.put("modelVersion", modelVersion);
+        UUID attemptId = UUID.randomUUID();
+        var saved = runs.saveAndFlush(LearningRecommendation.processing(request.userId(), request.topicId(),
+                profile.getId(), key, hash, input, attemptId, now().plus(processingLease)));
+        return new Claim(saved.getId(), attemptId, input, Map.copyOf(canonical), null);
+    }
+
+    private Map<String, Object> calculate(Claim claim, LearningRecommendationController.Request request,
+            String modelVersion) {
+        Map<String, Object> input = claim.input();
+        Map<String, DisplayBook> canonical = claim.canonical();
         Map<String, Object> result = new LinkedHashMap<>(ml.learningFit(input));
         result.put("conceptProfileVersion", "concept-abilities-v2");
         if (!modelVersion.equals(result.get("modelVersion"))
-                || !topic.getMlTopicId().equals(result.get("topicId"))
+                || !input.get("topicId").equals(result.get("topicId"))
                 || !request.ability().name().equals(result.get("ability"))
                 || !(result.get("items") instanceof List<?> ranked) || ranked.size() > request.topK())
             throw new MlGatewayException("ML_INVALID_RESPONSE", "추천 응답을 확인하지 못했습니다.");
-        if (v2) LearningReadinessValidator.validate(input, result);
+        if ("concept-learning-v2".equals(modelVersion)) LearningReadinessValidator.validate(input, result);
         List<Map<String, Object>> mapped = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (Object value : ranked) {
@@ -118,23 +166,42 @@ public class LearningRecommendationService {
                 throw new MlGatewayException("ML_INVALID_RESPONSE", "추천 도서 연결을 확인하지 못했습니다.");
             Map<String, Object> display = new LinkedHashMap<>();
             row.forEach((k, v) -> display.put(k.toString(), v));
-            Book book = canonical.get(canonicalId);
+            DisplayBook book = canonical.get(canonicalId);
             display.put("canonicalBookId", canonicalId);
-            display.put("bookId", book.getId());
-            display.put("title", book.getTitle());
-            display.put("author", book.getAuthor());
+            display.put("bookId", book.id());
+            display.put("title", book.title());
+            display.put("author", book.author());
             mapped.add(display);
         }
         result.put("items", mapped);
-        var saved = runs.saveAndFlush(new LearningRecommendation(request.userId(), request.topicId(), profile.getId(),
-                key, hash, input, result));
-        return new Created(response(saved), true);
+        return result;
+    }
+
+    private Created finish(Claim claim, Map<String, Object> result) {
+        var run = runs.findByIdForUpdate(claim.runId()).orElse(null);
+        if (run == null || !run.ownsAttempt(claim.attemptId()) || !run.hasActiveLease(now()))
+            throw new RecommendationConflictException("추천 처리 권한이 만료되었습니다. 다시 요청해 주세요.");
+        run.succeed(result);
+        runs.flush();
+        return new Created(response(run), true);
+    }
+
+    private void recover(Claim claim) {
+        try {
+            transactions.executeWithoutResult(status -> {
+                var run = runs.findByIdForUpdate(claim.runId()).orElse(null);
+                if (run != null && run.ownsAttempt(claim.attemptId())) runs.delete(run);
+            });
+        } catch (RuntimeException exception) {
+            LOG.error("추천 처리 복구 실패 runId={}; 임대 만료 후 다시 요청할 수 있습니다.", claim.runId(), exception);
+        }
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> get(long id) {
         var run = runs.findById(id).orElseThrow(() -> new ResourceNotFoundException("추천을 찾을 수 없습니다."));
         ownership.user(run.getUserId());
+        if (run.isProcessing()) throw new RecommendationConflictException("추천 처리가 진행 중이거나 만료되었습니다. 다시 요청해 주세요.");
         return response(run);
     }
     private Map<String, Object> response(LearningRecommendation run) {
@@ -149,4 +216,8 @@ public class LearningRecommendationService {
                     .digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
+    private OffsetDateTime now() { return OffsetDateTime.now(ZoneOffset.UTC); }
+    private record DisplayBook(long id, String title, String author) {}
+    private record Claim(long runId, UUID attemptId, Map<String, Object> input,
+            Map<String, DisplayBook> canonical, Map<String, Object> existing) {}
 }
