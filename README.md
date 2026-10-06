@@ -1,5 +1,8 @@
 # CAU 캡스톤디자인 8조 Backend
 
+로컬 실행 시 최신 선택 목록을 적용하고 분야가 섞인 이전 자료를 숨기는 절차는
+[도서 선택 버전과 로컬 실행](docs/catalog-selection.md)을 참고하세요.
+
 도서 목록·상세·내 서재 응답은 검토된 표지가 있을 때만 `coverUrl`을 반환하며, 없으면 `null`입니다.
 출처·판본 확인과 관리자 입력 절차는 [표지 메타데이터 안내](docs/catalog-covers.md)를 참고하세요.
 
@@ -208,3 +211,5 @@ main 직접 커밋 금지, 승인 없는 merge/force push 금지. 작은 기능 
 [AI 검토 등록 계약](docs/ai-question-review-v1.md)을 참고하세요. AI 판정은 `aiReview`로 보존하며
 기존 `humanReview` 기록과 구분합니다. rank-v2 HTTP 연동은 이미 구현되어 있습니다.
 [5단계 검증](docs/verification-stage5.md)과 [6단계 검증](docs/verification-stage6.md)을 참고하세요.
+
+Provider-discovered browsing fields support authenticated catalog refresh and failed-source retry. Existing books remain visible until a validated additive selection is published. See [topic preparation](docs/topic-preparation.md#explicit-catalog-refresh-2026-10-06) for the request contract, job fencing, provider limits and diagnosis boundary.

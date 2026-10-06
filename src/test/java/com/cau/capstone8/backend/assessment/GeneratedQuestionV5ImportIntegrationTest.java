@@ -42,6 +42,19 @@ class GeneratedQuestionV5ImportIntegrationTest {
             """.formatted(id, status).replace("\n", "");
     }
 
+    @Test void latestWorkerContractImportsWithoutRelabelingLegacyArtifacts() {
+        var json=tools.jackson.databind.json.JsonMapper.builder().build();
+        var values=new java.util.TreeMap<String,Object>(json.readValue(generated,java.util.Map.class));
+        values.put("prompt_version","concept-question-generation-prompt-v3");
+        values.put("generation_config_version","concept-question-generation-config-v2");
+        var identity=new java.util.TreeMap<>(values);identity.remove("generated_question_id");identity.remove("usage");
+        String current="gq_"+ApprovedQuestionImportService.sha256(json.writeValueAsBytes(identity)).substring(7,39);
+        values.put("generated_question_id",current);
+        assertThat(importer.importApproved(json.writeValueAsString(values),review("approve").replace(id,current)).created()).isTrue();
+        values.put("generation_config_version","concept-question-generation-config-v1");
+        assertThatThrownBy(()->importer.importApproved(json.writeValueAsString(values),review("approve").replace(id,current))).isInstanceOf(QuestionImportException.class);
+    }
+
     @Test void strictImportPreservesConceptAbilityAndContextWithoutPassage() {
         var first = importer.importApproved(generated, review("approve"));
         assertThat(first.created()).isTrue();

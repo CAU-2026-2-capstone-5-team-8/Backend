@@ -1,0 +1,195 @@
+{
+  "version": "topic-name-resolution-v1",
+  "groups": [
+    {
+      "code": "MAT",
+      "aliases": [
+        "수학",
+        "mathematics",
+        "math"
+      ]
+    },
+    {
+      "code": "CS",
+      "aliases": [
+        "컴퓨터과학",
+        "컴퓨터공학",
+        "컴퓨터",
+        "computer science",
+        "computer engineering",
+        "CS"
+      ]
+    }
+  ],
+  "topics": [
+    {
+      "slug": "computer-networks",
+      "name": "컴퓨터 네트워크",
+      "parentCode": "CS",
+      "parentName": "컴퓨터과학",
+      "aliases": [
+        "컴퓨터 통신망",
+        "computer networks",
+        "computer network",
+        "computer networking"
+      ],
+      "relatedTerms": [
+        "네트워크",
+        "network",
+        "networking",
+        "TCP",
+        "IP",
+        "TCP/IP",
+        "라우팅",
+        "DNS",
+        "UDP",
+        "데이터 통신",
+        "data communications"
+      ],
+      "excludedTerms": [
+        "소셜",
+        "신경망",
+        "인맥",
+        "마케팅",
+        "social",
+        "neural"
+      ]
+    },
+    {
+      "slug": "operating-systems",
+      "name": "운영체제",
+      "parentCode": "CS",
+      "parentName": "컴퓨터과학",
+      "aliases": [
+        "OS",
+        "operating system",
+        "operating systems"
+      ],
+      "relatedTerms": [
+        "운영체제",
+        "프로세스",
+        "스케줄링",
+        "가상 메모리",
+        "동기화",
+        "operating system",
+        "process scheduling",
+        "virtual memory"
+      ],
+      "excludedTerms": []
+    },
+    {
+      "slug": "linear-algebra",
+      "name": "선형대수",
+      "parentCode": "MAT",
+      "parentName": "수학",
+      "aliases": [
+        "선형대수학",
+        "linear algebra"
+      ],
+      "relatedTerms": [
+        "선형대수",
+        "행렬",
+        "벡터 공간",
+        "고유값",
+        "고유벡터",
+        "matrix",
+        "matrices",
+        "eigenvalue",
+        "vector space"
+      ],
+      "excludedTerms": []
+    },
+    {
+      "slug": "algorithms",
+      "name": "알고리즘",
+      "parentCode": "CS",
+      "parentName": "컴퓨터과학",
+      "aliases": [
+        "algorithm",
+        "algorithms",
+        "computer algorithms"
+      ],
+      "relatedTerms": [
+        "알고리즘",
+        "자료구조",
+        "정렬",
+        "동적 계획법",
+        "algorithm",
+        "data structures",
+        "sorting",
+        "dynamic programming"
+      ],
+      "excludedTerms": [
+        "부의 알고리즘",
+        "인생",
+        "마케팅"
+      ]
+    },
+    {
+      "slug": "databases",
+      "name": "데이터베이스",
+      "parentCode": "CS",
+      "parentName": "컴퓨터과학",
+      "aliases": [
+        "DB",
+        "DBMS",
+        "database",
+        "databases",
+        "database systems",
+        "database management systems"
+      ],
+      "relatedTerms": [
+        "데이터베이스",
+        "SQL",
+        "NoSQL",
+        "트랜잭션",
+        "인덱스",
+        "database",
+        "transaction"
+      ],
+      "excludedTerms": []
+    },
+    {
+      "slug": "discrete-mathematics",
+      "name": "이산수학",
+      "parentCode": "MAT",
+      "parentName": "수학",
+      "aliases": [
+        "discrete math",
+        "discrete mathematics"
+      ],
+      "relatedTerms": [
+        "이산수학",
+        "명제 논리",
+        "조합론",
+        "그래프 이론",
+        "discrete mathematics",
+        "graph theory",
+        "combinatorics"
+      ],
+      "excludedTerms": []
+    },
+    {
+      "slug": "probability-statistics",
+      "name": "확률과 통계",
+      "parentCode": "MAT",
+      "parentName": "수학",
+      "aliases": [
+        "확률 및 통계",
+        "확률통계",
+        "확통",
+        "probability and statistics",
+        "probability statistics"
+      ],
+      "relatedTerms": [
+        "확률",
+        "통계",
+        "베이즈",
+        "probability",
+        "statistics",
+        "bayes"
+      ],
+      "excludedTerms": []
+    }
+  ]
+}

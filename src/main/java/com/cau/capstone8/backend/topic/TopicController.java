@@ -14,7 +14,9 @@ public class TopicController {
     private final TopicRepository topics;
     private final CatalogSummaryService catalog;
     private final QuestionRepository questions;
-    public TopicController(TopicRepository topics, CatalogSummaryService catalog, QuestionRepository questions) {
+    private final TopicDiagnosticState diagnostics;
+    public TopicController(TopicRepository topics, CatalogSummaryService catalog, QuestionRepository questions,TopicDiagnosticState diagnostics) {
+        this.diagnostics=diagnostics;
         this.topics = topics; this.catalog = catalog; this.questions = questions;
     }
 
@@ -24,8 +26,15 @@ public class TopicController {
         var banks = questions.findByActiveTrueOrderById().stream().collect(Collectors.groupingBy(Question::getTopicId));
         return topics.findAllByOrderByIdAsc().stream()
                 .map(t -> new TopicResponse(
-                        t.getId(), t.getCode(), t.getName(), t.getMlTopicId(), t.getParentId(),ready.contains(t.getId()),
-                        ConceptQuestionSelection.select(banks.getOrDefault(t.getId(), List.of()), 9).size() == 9)).toList();
+                        t.getId(), t.getCode(), t.getName(), t.getMlTopicId(), t.getParentId(),ready.contains(t.getId()) && diagnostics.ready(t.getId()),
+                        diagnostics.ready(t.getId()) && ConceptQuestionSelection.select(banks.getOrDefault(t.getId(), List.of()), 9).size() == 9)).toList();
+    }
+    @GetMapping("/{id}/preparation")
+    public java.util.Map<String,Object> preparation(@PathVariable long id) { return diagnostics.get(id); }
+    @PostMapping("/{id}/preparation/retry")
+    public java.util.Map<String,Object> retryPreparation(@PathVariable long id) {
+        com.cau.capstone8.backend.account.CurrentAccount.id();
+        return diagnostics.retry(id);
     }
     public record TopicResponse(long id, String code, String name, String mlTopicId, Long parentId,
                                 boolean assessmentReady, boolean conceptAssessmentReady) {}

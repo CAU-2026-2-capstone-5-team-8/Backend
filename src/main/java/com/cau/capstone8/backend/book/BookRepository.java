@@ -7,17 +7,17 @@ import org.springframework.data.repository.query.Param;
 public interface BookRepository extends JpaRepository<Book, Long> {
     // Native LIMIT/OFFSET accepts a long offset, including the largest valid page number.
     @Query(value = """
-            SELECT b.* FROM backend.book b
+            SELECT b.* FROM backend.catalog_visible_book b
             WHERE (:topicId IS NULL OR EXISTS (
-              SELECT 1 FROM backend.book_topic bt WHERE bt.book_id=b.id AND bt.topic_id=:topicId))
+              SELECT 1 FROM backend.catalog_visible_book_topic bt WHERE bt.book_id=b.id AND bt.topic_id=:topicId))
             ORDER BY b.id LIMIT :size OFFSET :offset
             """, nativeQuery = true)
     List<Book> findCatalog(@Param("topicId") Long topicId, @Param("size") int size, @Param("offset") long offset);
 
     @Query(value = """
-            SELECT count(*) FROM backend.book b
+            SELECT count(*) FROM backend.catalog_visible_book b
             WHERE (:topicId IS NULL OR EXISTS (
-              SELECT 1 FROM backend.book_topic bt WHERE bt.book_id=b.id AND bt.topic_id=:topicId))
+              SELECT 1 FROM backend.catalog_visible_book_topic bt WHERE bt.book_id=b.id AND bt.topic_id=:topicId))
             """, nativeQuery = true)
     long countCatalog(@Param("topicId") Long topicId);
 
