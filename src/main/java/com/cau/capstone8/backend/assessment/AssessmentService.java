@@ -16,6 +16,7 @@ public class AssessmentService {
     private static final int QUESTIONS_PER_AREA = 3;
     private static final int TOTAL_QUESTIONS = QUESTIONS_PER_AREA * MeasurementArea.values().length;
 
+    private final QuestionTranslationService translations;
     private final AssessmentSessionRepository sessions;
     private final AssessmentQuestionRepository assessmentQuestions;
     private final AssessmentAnswerRepository answers;
@@ -26,7 +27,8 @@ public class AssessmentService {
 
     public AssessmentService(AssessmentSessionRepository sessions, AssessmentQuestionRepository assessmentQuestions,
                               AssessmentAnswerRepository answers, QuestionRepository questions,
-                              TopicRepository topics, AppUserRepository users,com.cau.capstone8.backend.topic.TopicDiagnosticState diagnosticState) {
+                              TopicRepository topics, AppUserRepository users,com.cau.capstone8.backend.topic.TopicDiagnosticState diagnosticState, QuestionTranslationService translations) {
+        this.translations=translations;
         this.diagnosticState=diagnosticState;
         this.sessions = sessions;
         this.assessmentQuestions = assessmentQuestions;
@@ -167,6 +169,7 @@ public class AssessmentService {
                 question.getMeasurementContextSnapshot(),
                 choices,
                 answer == null ? null : answer.getKnowsConcept(),
-                answer == null ? null : answer.getSelectedChoiceIndex());
+                answer == null ? null : answer.getSelectedChoiceIndex(),
+                translations.display(question));
     }
 }

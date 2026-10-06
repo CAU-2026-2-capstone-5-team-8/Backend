@@ -25,6 +25,12 @@ preparation_args = []
 if env.get("TOPIC_PREPARATION_ENABLED", "false").lower() == "true":
     preparation_args = [
         "--topic-preparation.enabled=true",
+        "--question-translation.enabled="
+        + str(env.get("QUESTION_TRANSLATION_ENABLED", "true")).lower(),
+        "--question-translation.script="
+        + str(root / "scripts/question-translation.py"),
+        "--question-translation.python="
+        + str(root.parent / "Question-Generation/.venv/bin/python"),
         "--topic-preparation.python="
         + str(root.parent / "Data-Pipeline/.venv/bin/python"),
         "--topic-preparation.script=" + str(root / "scripts/topic-preparation.py"),
