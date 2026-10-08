@@ -356,7 +356,11 @@ class TopicRequestIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT status FROM backend.topic_request WHERE id=?",String.class,job.id())).isEqualTo("COLLECTING");
         topic.put("decisions",List.of(Map.of("book_id",bookId,"included",true,"reason","provider_filter_pass")));
         java.nio.file.Files.writeString(selection,json.writeValueAsString(selected));
-        preparation.publish(job,"computer-networks",source,selection);
+        preparation.publish(job,"computer-networks",source,selection,json.readTree("""
+                {"google_books":{"status":"provider_failed","statusCode":429,"privatePath":"must not persist"}}
+                """));
+        var stored=jdbc.queryForObject("SELECT provider_report::text FROM backend.catalog_selection_snapshot WHERE snapshot_id='synthetic-job-selected'",String.class);
+        assertThat(stored).contains("provider_failed","429").doesNotContain("privatePath","must not persist");
         var ready=json.readTree(call("GET","/api/topic-requests/"+job.id(),aliceToken,null).body());
         assertThat(ready.path("status").asString()).isEqualTo("BOOKS_READY");
         assertThat(ready.path("bookCount").asInt()).isEqualTo(1);

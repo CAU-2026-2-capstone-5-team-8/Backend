@@ -59,6 +59,22 @@ class QuestionTranslationIntegrationTest {
     @Test void staleClaimCannotPublishAndFailedTranslationStaysOriginal() {
         var job=translations.claim();translations.fail(job);translations.publish(job,ready(job));
         assertThat(translations.display(snapshot(question.getGeneratedContentHash()))).isNull();
+        var retry=translations.claim();assertThat(retry).isNotNull();
+        translations.fail(retry);
+        var last=translations.claim();assertThat(last).isNotNull();translations.fail(last);
         assertThat(translations.claim()).isNull();
+        assertThat(jdbc.queryForObject("select attempts from backend.question_display_translation where question_id=?",Integer.class,job.questionId())).isEqualTo(3);
+    }
+    @Test void invalidShapeNeverBecomesReady() {
+        var job=translations.claim();
+        var missing=(tools.jackson.databind.node.ObjectNode)ready(job);missing.remove("passage");
+        assertThatThrownBy(()->translations.publish(job,missing)).isInstanceOf(IllegalArgumentException.class);
+        var blank=(tools.jackson.databind.node.ObjectNode)ready(job);blank.set("choices",json.valueToTree(java.util.List.of("a"," ","c","d")));
+        assertThatThrownBy(()->translations.publish(job,blank)).isInstanceOf(IllegalArgumentException.class);
+        var numeric=(tools.jackson.databind.node.ObjectNode)ready(job);numeric.set("choices",json.valueToTree(java.util.List.of(1,2,3,4)));
+        assertThatThrownBy(()->translations.publish(job,numeric)).isInstanceOf(IllegalArgumentException.class);
+        var added=(tools.jackson.databind.node.ObjectNode)ready(job);added.put("passage","Invented passage");
+        assertThatThrownBy(()->translations.publish(job,added)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(translations.display(snapshot(question.getGeneratedContentHash()))).isNull();
     }
 }

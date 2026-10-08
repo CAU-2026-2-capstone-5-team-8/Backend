@@ -113,6 +113,11 @@ public class TopicPreparationService {
 
     @Transactional
     public void publish(Job job, String slug, Path importManifest, Path selectionManifest) {
+        publish(job,slug,importManifest,selectionManifest,tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode());
+    }
+
+    @Transactional
+    public void publish(Job job, String slug, Path importManifest, Path selectionManifest, tools.jackson.databind.JsonNode providerReport) {
         lock(job,"COLLECTING");
         String resolved=jdbc.queryForObject("SELECT resolved_slug FROM backend.topic_request WHERE id=?",String.class,job.id());
         if (!java.util.Objects.equals(slug,resolved)) throw new IllegalArgumentException("resolved topic changed");
@@ -130,6 +135,9 @@ public class TopicPreparationService {
         if (!selected.snapshotId().equals(result.snapshotId()+"-selected") || selected.included()!=result.bookCount()
                 || current.size()!=1 || !current.getFirst().equals(selected.snapshotId()))
             throw new IllegalArgumentException("prepared selection differs");
+        var json=tools.jackson.databind.json.JsonMapper.builder().build();
+        jdbc.update("UPDATE backend.catalog_selection_snapshot SET provider_report=cast(? as jsonb) WHERE snapshot_id=?",
+                json.writeValueAsString(TopicCatalogRefreshService.providers(providerReport)),selected.snapshotId());
         ready(job,topicId,result.bookCount(),slug);
     }
 

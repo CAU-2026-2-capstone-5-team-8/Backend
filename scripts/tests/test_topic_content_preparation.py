@@ -129,3 +129,50 @@ def test_missing_source_or_wrong_field_is_rejected_before_a_model_call(tmp_path)
     )
     with pytest.raises(ValueError, match="source_topic_differs"):
         adapter.find_source(tmp_path, "source", "synthetic-topic")
+
+
+def source_snapshot(root, snapshot):
+    run = root / snapshot
+    (run / "handoff").mkdir(parents=True)
+    (run / "canonical").mkdir()
+    books = json.dumps({"book_id": snapshot, "title": "Synthetic book"}) + "\n"
+    (run / "handoff/books.jsonl").write_text(books)
+    (run / "canonical/books.jsonl").write_text(books)
+    adapter.save(run / "handoff/import.json", {
+        "snapshot_id": snapshot, "topics": [{
+            "topic": {"ml_topic_id": "synthetic-topic"}, "books_path": "books.jsonl",
+            "books_sha256": adapter.digest(books.encode()), "canonical_hashes": {}
+        }]
+    })
+    return run
+
+
+def test_refresh_copies_new_snapshot_without_overwriting_previous(tmp_path):
+    source_snapshot(tmp_path / "catalog-refresh", "first")
+    source_snapshot(tmp_path / "catalog-refresh", "second")
+    workspace = tmp_path / "request--1"
+    first = adapter.resolve_source(workspace, "first", "synthetic-topic")
+    original = first[0].joinpath("books.jsonl").read_bytes()
+    second = adapter.resolve_source(workspace, "second", "synthetic-topic")
+    assert first[0] != second[0]
+    assert first[0].joinpath("books.jsonl").read_bytes() == original
+    assert adapter.resolve_source(workspace, "second", "synthetic-topic") == second
+
+
+def test_interrupted_copy_can_retry_without_publishing_partial_snapshot(tmp_path, monkeypatch):
+    import shutil
+    source_snapshot(tmp_path / "catalog-refresh", "snapshot")
+    workspace = tmp_path / "request--1"
+    original = shutil.copytree
+
+    def interrupted(source, destination, *args, **kwargs):
+        if Path(source).name == "canonical":
+            raise OSError("interrupted copy")
+        return original(source, destination, *args, **kwargs)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(shutil, "copytree", interrupted)
+        with pytest.raises(OSError, match="interrupted copy"):
+            adapter.resolve_source(workspace, "snapshot", "synthetic-topic")
+    assert list((workspace / "content-source").iterdir()) == []
+    assert adapter.resolve_source(workspace, "snapshot", "synthetic-topic")[2]["snapshot_id"] == "snapshot"

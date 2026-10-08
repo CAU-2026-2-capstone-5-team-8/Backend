@@ -61,7 +61,7 @@ public class TopicPreparationWorker {
                 if(!jobs.resolved(job,slug))return;
                 var result=adapter.run(job,"collect",slug,java.util.Map.of("discovery",json.readValue(job.discoveryJson(),java.util.Map.class)));
                 if(!"COLLECTED".equals(result.path("status").asString()) || !slug.equals(result.path("slug").asString()))throw new IllegalArgumentException("invalid discovery collection result");
-                jobs.publish(job,slug,adapter.manifest(result,"importManifest",job),adapter.manifest(result,"selectionManifest",job));
+                jobs.publish(job,slug,adapter.manifest(result,"importManifest",job),adapter.manifest(result,"selectionManifest",job),result.path("providers"));
                 return;
             }
             var resolution=resolver.resolve(job.name(),job.selectedSlug());
@@ -78,7 +78,7 @@ public class TopicPreparationWorker {
             var result=adapter.run(job,"collect",slug);
             if (!"COLLECTED".equals(result.path("status").asString()) || !slug.equals(result.path("slug").asString()))
                 throw new IllegalArgumentException("invalid collection result");
-            jobs.publish(job,slug,adapter.manifest(result,"importManifest",job),adapter.manifest(result,"selectionManifest",job));
+            jobs.publish(job,slug,adapter.manifest(result,"importManifest",job),adapter.manifest(result,"selectionManifest",job),result.path("providers"));
             LOG.info("topic preparation completed request={}",job.id());
         } catch (Exception e) {
             jobs.fail(job);

@@ -17,15 +17,14 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class TopicCatalogRefreshService {
     private final JdbcTemplate jdbc;
-    private final TopicPreparationAdapter adapter;
     private final DiscoveryCatalogImportService imports;
     private final CatalogSelectionService selections;
     private final boolean enabled;
     private final JsonMapper json=JsonMapper.builder().build();
     private static final List<String> PROVIDERS=List.of("yes24","open_library","google_books","national_library");
-    public TopicCatalogRefreshService(JdbcTemplate jdbc,TopicPreparationAdapter adapter,DiscoveryCatalogImportService imports,
+    public TopicCatalogRefreshService(JdbcTemplate jdbc,DiscoveryCatalogImportService imports,
             CatalogSelectionService selections,@Value("${topic-preparation.enabled:false}") boolean enabled) {
-        this.jdbc=jdbc;this.adapter=adapter;this.imports=imports;this.selections=selections;this.enabled=enabled;
+        this.jdbc=jdbc;this.imports=imports;this.selections=selections;this.enabled=enabled;
     }
     public record Provider(String id,String status,int bookCount,Integer statusCode) {}
     public record State(boolean available,String status,int bookCount,int addedBookCount,String updatedAt,List<Provider> providers) {}
@@ -39,7 +38,7 @@ public class TopicCatalogRefreshService {
     private Map<String,Object> topic(long id) {
         var rows=jdbc.queryForList("""
                 SELECT t.id,t.name,t.ml_topic_id,p.code AS parent_code,p.name AS parent_name,
-                       c.snapshot_id,s.manifest_hash,
+                       c.snapshot_id,s.manifest_hash,s.provider_report,
                        (SELECT count(*) FROM backend.catalog_visible_book_topic v WHERE v.topic_id=t.id) AS book_count
                 FROM backend.topic t LEFT JOIN backend.topic p ON p.id=t.parent_id
                 LEFT JOIN backend.catalog_selection_current c ON c.topic_id=t.id
@@ -56,18 +55,19 @@ public class TopicCatalogRefreshService {
         return new Job(UUID.randomUUID(),null,((Number)t.get("id")).longValue(),(String)t.get("ml_topic_id"),(String)t.get("name"),
                 (String)t.get("parent_code"),(String)t.get("parent_name"),(String)t.get("snapshot_id"),(String)t.get("manifest_hash"),List.of());
     }
-    private JsonNode evidence(Map<String,Object> t) {
-        try {var job=baseline(t);return adapter.run(job.adapterJob(),"catalog-state",job.slug(),job.input());}
-        catch(Exception e) {return json.readTree("{\"available\":false,\"providers\":{}}");}
+    private List<Provider> storedProviders(Map<String,Object> topic) {
+        var stored=json.readTree(topic.get("provider_report").toString());
+        if(stored.isEmpty())return providers(json.createObjectNode());
+        return List.of(json.treeToValue(stored,Provider[].class));
     }
-    private List<Provider> providers(JsonNode report) {
+    static List<Provider> providers(JsonNode report) {
         return PROVIDERS.stream().map(id->{var p=report.path(id);return new Provider(id,p.path("status").asString("not_collected"),
                 p.path("bookCount").asInt(0),p.has("statusCode")?p.path("statusCode").asInt():null);}).toList();
     }
     public State state(long topicId) {
         var t=topic(topicId);int count=((Number)t.get("book_count")).intValue();
         if(!eligible(t))return new State(false,"UNAVAILABLE",count,0,null,List.of());
-        var data=evidence(t);
+        var providerStates=storedProviders(t);
         var recent=jdbc.queryForList("SELECT status,added_book_count,published_selection,baseline_selection,updated_at FROM backend.topic_catalog_refresh WHERE topic_id=? ORDER BY created_at DESC LIMIT 1",topicId);
         String status="IDLE",updated=null;int added=0;
         if(!recent.isEmpty()) {
@@ -76,7 +76,7 @@ public class TopicCatalogRefreshService {
                 status=latest;added=((Number)r.get("added_book_count")).intValue();updated=r.get("updated_at").toString();
             }
         }
-        return new State(data.path("available").asBoolean(),status,count,added,updated,providers(data.path("providers")));
+        return new State(true,status,count,added,updated,providerStates);
     }
     @Transactional
     public State start(long user,long topicId,Input input) {
@@ -88,9 +88,9 @@ public class TopicCatalogRefreshService {
         if(!active.isEmpty())return state(topicId);
         var t=topic(topicId);
         if(!eligible(t))throw unavailable();
-        var data=evidence(t);if(!data.path("available").asBoolean())throw unavailable();
+        var providerStates=storedProviders(t);
         // The server derives failed providers from the active evidence. Clients cannot supply commands or scopes.
-        var chosen=mode.equals("ALL")?PROVIDERS:providers(data.path("providers")).stream()
+        var chosen=mode.equals("ALL")?PROVIDERS:providerStates.stream()
                 .filter(p->p.status().equals("provider_failed")).map(Provider::id).toList();
         if(chosen.isEmpty())throw new AccountException(409,"NO_FAILED_PROVIDERS","다시 시도할 출처가 없어요.");
         if(jdbc.queryForObject("SELECT count(*) FROM backend.topic_catalog_refresh WHERE topic_id=? AND created_at>now()-interval '1 minute'",Integer.class,topicId)>0
@@ -149,6 +149,7 @@ public class TopicCatalogRefreshService {
         var reports=providers(result.path("providers"));
         if(reports.stream().anyMatch(p->!Set.of("collected","provider_failed","unmapped_language","unmapped_category").contains(p.status())
             && !(p.id().equals("national_library") && (p.status().equals("not_configured") || (p.status().equals("not_collected") && !job.providers().contains(p.id()))))))throw new IllegalArgumentException("invalid provider status");
+        jdbc.update("UPDATE backend.catalog_selection_snapshot SET provider_report=cast(? as jsonb) WHERE snapshot_id=?",json.writeValueAsString(reports),selected.snapshotId());
         String status=reports.stream().anyMatch(p->p.status().equals("provider_failed"))?"PARTIAL":"COMPLETE";
         // Keep only the public status projection; private raw paths and exception details stay in the workspace.
         jdbc.update("UPDATE backend.topic_catalog_refresh SET status=?,report=cast(? as jsonb),added_book_count=?,published_selection=?,claim_token=null,lease_until=null,updated_at=now() WHERE id=?",

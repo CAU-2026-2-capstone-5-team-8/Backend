@@ -91,6 +91,8 @@ def provider_schema(schema):
 def find_source(directory, snapshot, slug):
     matches = []
     for path in directory.glob("*/handoff/import.json"):
+        if path.parent.parent.name.startswith("."):
+            continue
         manifest = json.loads(path.read_text())
         if manifest["snapshot_id"] == snapshot:
             matches.append((path, manifest))
@@ -199,34 +201,45 @@ def propose_outline(slug, name, directory, model):
     return outline, cache
 
 
+def resolve_source(directory, snapshot, slug):
+    """Reuse a verified snapshot or atomically publish a private snapshot-specific copy."""
+    import shutil
+    from tempfile import TemporaryDirectory
+
+    sources = directory / "content-source"
+    for root in (directory, sources):
+        try:
+            return find_source(root, snapshot, slug)
+        except ValueError as exc:
+            if str(exc) != "source_snapshot_not_unique":
+                raise
+    origins = []
+    for candidate in directory.parent.rglob("handoff/import.json"):
+        if candidate.is_relative_to(directory) or "content-source" in candidate.parts:
+            continue
+        if json.loads(candidate.read_text()).get("snapshot_id") == snapshot:
+            origins.append(candidate)
+    if len(origins) != 1:
+        raise ValueError("source_snapshot_not_unique")
+    original = origins[0]
+    find_source(original.parent.parent.parent, snapshot, slug)
+    sources.mkdir(parents=True, exist_ok=True)
+    final = sources / hashlib.sha256(snapshot.encode()).hexdigest()[:24]
+    if not final.exists():
+        with TemporaryDirectory(dir=sources, prefix=".staging-") as temporary:
+            staged = Path(temporary) / "snapshot"
+            shutil.copytree(original.parent, staged / "handoff")
+            shutil.copytree(original.parent.parent / "canonical", staged / "canonical")
+            find_source(Path(temporary), snapshot, slug)
+            staged.rename(final)
+    return find_source(sources, snapshot, slug)
+
+
 def main():
     payload = json.load(sys.stdin)
     directory = Path(sys.argv[1]).resolve() / f"request-{int(payload['requestId'])}"
     slug, snapshot = payload["slug"], payload["sourceSnapshotId"]
-    # Catalog work is durable and may originate from another request or a refresh.
-    # Copy only verified immutable source evidence into this topic's private workspace.
-    try:
-        canonical, import_path, manifest = find_source(directory, snapshot, slug)
-    except ValueError as exc:
-        if str(exc) != "source_snapshot_not_unique":
-            raise
-        import shutil
-        origins = []
-        for candidate in directory.parent.rglob("handoff/import.json"):
-            if candidate.is_relative_to(directory) or "content-source" in candidate.parts:
-                continue
-            if json.loads(candidate.read_text()).get("snapshot_id") == snapshot:
-                origins.append(candidate)
-        if len(origins) != 1:
-            raise ValueError("source_snapshot_not_unique")
-        original = origins[0]
-        find_source(original.parent.parent.parent, snapshot, slug)
-        target = directory / "content-source" / "handoff"
-        if not target.exists():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(original.parent, target)
-            shutil.copytree(original.parent.parent / "canonical", target.parent / "canonical")
-        canonical, import_path, manifest = find_source(directory, snapshot, slug)
+    canonical, import_path, manifest = resolve_source(directory, snapshot, slug)
     topic_name = manifest["topics"][0]["topic"]["name"]
     model = os.getenv("QUESTION_GENERATION_MODEL", "gemini-3.5-flash-lite")
     proposal_dir = directory / "content-proposals"

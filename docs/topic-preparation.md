@@ -403,3 +403,21 @@ AI의 의미 검토는 사람의 번역 감수나 언어별 진단 동등성 실
 거시경제에서 각 9문항(총 45문항)을 실제 API로 발급하고 답변 저장·재조회 및 원문 보존을 확인했다.
 임시 계정만 정리한 뒤 기존 계정·문항·진단·답변·추천 테이블의 내용이 변경되지 않았음을 확인했다.
 이는 로컬 번역 연동 검증이며 번역의 인간 감수나 진단·추천의 측정 타당성 검증은 아니다.
+
+
+### Integration hardening (2026-10-08)
+
+Catalog status and refresh requests read a public provider-status projection stored with the
+selection snapshot. They do not launch Python processes while serving HTTP or holding user/topic
+locks. Initial collection and refresh publication update the projection transactionally; older
+snapshots without recorded provider status show `not_collected`. A full refresh remains available,
+while failed-provider retry requires an observed failure. The worker still verifies the canonical
+baseline, selection hash and immutable evidence before collecting or publishing.
+
+Content preparation copies each source snapshot to its own directory and publishes that copy
+atomically after integrity checks. A catalog refresh can therefore prepare a new snapshot without
+overwriting or reusing the previous snapshot's evidence. Interrupted copies remain unpublished.
+
+Display translation failures retry within the three-attempt budget. Publication checks passage
+presence and nonblank text/choices against the stored source and fences stale claims; original
+questions, answer keys and issued snapshots remain unchanged.

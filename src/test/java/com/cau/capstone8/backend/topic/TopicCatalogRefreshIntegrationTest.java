@@ -49,11 +49,12 @@ class TopicCatalogRefreshIntegrationTest {
         jdbc.update("INSERT INTO backend.catalog_selection_topic VALUES (?,9501)",baseline);
         jdbc.update("INSERT INTO backend.catalog_selection_member VALUES (?,9501,9502,true,'provider_filter_pass')",baseline);
         jdbc.update("INSERT INTO backend.catalog_selection_current VALUES (9501,?)",baseline);
-        when(adapter.run(any(),eq("catalog-state"),eq(slug),anyMap())).thenReturn(json.readTree("""
-                {"available":true,"providers":{"yes24":{"status":"collected","bookCount":1},
-                "open_library":{"status":"collected","bookCount":0},"google_books":{"status":"provider_failed","statusCode":429}},
-                "privatePath":"should never appear in public responses"}
-                """));
+        var report=json.readTree("""
+                {"yes24":{"status":"collected","bookCount":1},"open_library":{"status":"collected","bookCount":0},
+                 "google_books":{"status":"provider_failed","statusCode":429},"privatePath":"not public"}
+                """);
+        jdbc.update("UPDATE backend.catalog_selection_snapshot SET provider_report=cast(? as jsonb) WHERE snapshot_id=?",
+                json.writeValueAsString(TopicCatalogRefreshService.providers(report)),baseline);
     }
     long user(String auth) throws Exception {
         long id=jdbc.queryForObject("INSERT INTO backend.app_user(display_name) VALUES ('Synthetic') RETURNING id",Long.class);
@@ -78,6 +79,7 @@ class TopicCatalogRefreshIntegrationTest {
         assertThat(catalogs.claim().providers()).containsExactly("yes24","open_library","google_books","national_library");
         assertThat(preparation.claim()).isNull();assertThat(discovery.claim()).isNull();assertThat(catalogs.claim()).isNull();
         assertThat(catalogs.state(9501).status()).isEqualTo("RUNNING");
+        verifyNoInteractions(adapter);
     }
     @Test void failedModeUsesOnlyServerObservedFailuresAndLimitsFreshAttempts() {
         catalogs.start(user,9501,new TopicCatalogRefreshService.Input("FAILED"));assertThat(catalogs.claim().providers()).containsExactly("google_books");
@@ -89,6 +91,7 @@ class TopicCatalogRefreshIntegrationTest {
         jdbc.update("UPDATE backend.topic_catalog_refresh SET lease_until=now()-interval '1 minute',created_at=now()-interval '2 minutes'");assertThat(catalogs.claim()).isNull();
         catalogs.start(user,9501,new TopicCatalogRefreshService.Input("FAILED"));var replacement=catalogs.claim();catalogs.fail(expired);
         assertThat(catalogs.state(9501).status()).isEqualTo("RUNNING");
+        verifyNoInteractions(adapter);
         assertThatThrownBy(()->catalogs.publish(expired,json.readTree("{}"),dir.resolve("missing"),dir.resolve("missing"))).hasMessageContaining("claim expired");
         assertThat(replacement.id()).isNotEqualTo(expired.id());
     }

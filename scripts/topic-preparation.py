@@ -773,6 +773,8 @@ def write_handoff(payload, run, dataset, raw_hashes, revision, code_hash, snapsh
         "bookCount": len(dataset.books),
         "importManifest": str(handoff / "import.json"),
         "selectionManifest": str(handoff / "selection.json"),
+        "providers": json.loads((run / "provider-report.json").read_text())
+        if (run / "provider-report.json").exists() else {},
     }
     return result
 

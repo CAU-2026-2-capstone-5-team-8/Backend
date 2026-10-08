@@ -26,11 +26,14 @@ public class QuestionTranslationService {
                 INSERT INTO backend.question_display_translation(question_id,source_hash,source_text)
                 SELECT q.id,q.generated_content_hash,jsonb_build_object('passage',q.passage,'prompt',q.prompt,'choices',q.choices)
                 FROM backend.question q WHERE q.active AND q.version='generated-question-v5'
-                AND q.generated_content_hash IS NOT NULL ON CONFLICT DO NOTHING
+                AND q.generated_content_hash IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM backend.question_display_translation t
+                    WHERE t.question_id=q.id AND t.source_hash=q.generated_content_hash AND t.language='ko')
+                ON CONFLICT DO NOTHING
                 """);
             var rows=jdbc.queryForList("""
                 SELECT question_id,source_hash,source_text::text FROM backend.question_display_translation
-                WHERE status='QUEUED' OR (status='TRANSLATING' AND lease_until<now() AND attempts<3)
+                WHERE attempts<3 AND (status='QUEUED' OR (status='TRANSLATING' AND lease_until<now()))
                 ORDER BY question_id DESC LIMIT 1 FOR UPDATE SKIP LOCKED
                 """);
             if(rows.isEmpty())return null;
@@ -52,15 +55,30 @@ public class QuestionTranslationService {
             || !"ko".equals(result.path("language").asString()) || !"question-translation-ko-v1".equals(result.path("version").asString())
             || result.path("prompt").asString().isBlank() || result.path("model").asString().isBlank()
             || result.path("choices").size()!=4) throw new IllegalArgumentException("invalid translation result");
+        var sources=jdbc.queryForList("""
+            SELECT source_text::text FROM backend.question_display_translation
+            WHERE question_id=? AND source_hash=? AND language='ko' AND status='TRANSLATING'
+                AND claim_token=? AND lease_until>now()
+            """,String.class,job.questionId(),job.sourceHash(),job.token());
+        if(sources.isEmpty())return;
+        var source=json.readValue(sources.getFirst(),StoredText.class);
+        var passage=result.path("passage");
+        boolean validPassage=source.passage()==null ? passage.isNull()
+                : passage.isString() && !passage.asString().isBlank();
+        boolean validChoices=result.path("choices").isArray() && source.choices()!=null
+                && result.path("choices").size()==source.choices().size();
+        for(var choice:result.path("choices"))validChoices &= choice.isString() && !choice.asString().isBlank();
+        if(!validPassage || !validChoices || !result.path("prompt").isString())
+            throw new IllegalArgumentException("invalid translation result");
         var text=json.createObjectNode();text.set("passage",result.path("passage"));text.set("prompt",result.path("prompt"));text.set("choices",result.path("choices"));
         jdbc.update("""
             UPDATE backend.question_display_translation SET status='READY',translated_text=?::jsonb,model=?,claim_token=null,lease_until=null
-            WHERE question_id=? AND source_hash=? AND language='ko' AND status='TRANSLATING' AND claim_token=?
+            WHERE question_id=? AND source_hash=? AND language='ko' AND status='TRANSLATING' AND claim_token=? AND lease_until>now()
             """,json.writeValueAsString(text),result.path("model").asString(),job.questionId(),job.sourceHash(),job.token());
     }
     public void fail(Job job) {
         jdbc.update("""
-            UPDATE backend.question_display_translation SET status='FAILED',claim_token=null,lease_until=null
+            UPDATE backend.question_display_translation SET status=CASE WHEN attempts<3 THEN 'QUEUED' ELSE 'FAILED' END,claim_token=null,lease_until=null
             WHERE question_id=? AND source_hash=? AND status='TRANSLATING' AND claim_token=?
             """,job.questionId(),job.sourceHash(),job.token());
     }
