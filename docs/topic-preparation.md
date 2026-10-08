@@ -489,7 +489,9 @@ java -jar build/libs/backend-0.0.1-SNAPSHOT.jar \
 
 정상 설정으로 worker를 다시 켜면 `catalog-backfill-` 수집본도 기존 목차 번역 → 개념 연결
 → 문제 생성 → AI 검토 → 활성화 경로를 사용한다. 준비 상태와 실패 시 이어서 시도 버튼은
-기존 분야에도 표시된다. 일반 local 서버 재시작은 DB에 선택이 이미 있으면 예전 bootstrap
+기존 분야에도 표시된다. 준비된 검토·문제 생성 단계는 다음 목차 번역보다 우선해, 다른
+분야의 긴 번역 때문에 이미 준비된 진단까지 대기하지 않도록 한다. 일반 local 서버
+재시작은 DB에 선택이 이미 있으면 예전 bootstrap
 manifest를 다시 활성화하지 않는다. 수동 선택 변경은 기존 `catalog-selection-import`
 프로필로 명시적으로 실행한다.
 

@@ -52,7 +52,8 @@ public class TopicPreparationWorker {
             return;
         }
         var job=jobs.claim();
-        if (job==null) { if (!prepareContent() && !prepareQuestions()) prepareReview(); return; }
+        // Finish ready diagnoses before starting more potentially long TOC translation batches.
+        if (job==null) { if (!prepareReview() && !prepareQuestions()) prepareContent(); return; }
         try {
             if(job.discoveryJson()!=null) {
                 var scope=json.readTree(job.discoveryJson());
@@ -122,8 +123,8 @@ public class TopicPreparationWorker {
         }
         return true;
     }
-    private void prepareReview() {
-        var job=activation.claim();if(job==null)return;
+    private boolean prepareReview() {
+        var job=activation.claim();if(job==null)return false;
         var q=job.question();
         try {
             var result=adapter.run(q.adapterJob(),"review",q.slug(),java.util.Map.of("sourceSnapshotId",q.snapshotId(),
@@ -134,5 +135,6 @@ public class TopicPreparationWorker {
         } catch(Exception e) {
             activation.fail(job);LOG.warn("topic question review failed topic={} kind={}",q.topicId(),e.getClass().getSimpleName());
         }
+        return true;
     }
 }
