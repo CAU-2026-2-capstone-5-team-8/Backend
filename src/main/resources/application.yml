@@ -56,3 +56,9 @@ app:
 
 recommendation:
   processing-lease: ${RECOMMENDATION_PROCESSING_LEASE:PT30S}
+
+catalog:
+  metadata-cache:
+    enabled: ${CATALOG_METADATA_CACHE_ENABLED:true}
+    maximum-size: ${CATALOG_METADATA_CACHE_MAXIMUM_SIZE:2000}
+    ttl: ${CATALOG_METADATA_CACHE_TTL:PT5M}

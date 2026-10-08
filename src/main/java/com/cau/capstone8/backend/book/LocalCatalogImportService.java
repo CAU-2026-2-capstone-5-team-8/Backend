@@ -83,8 +83,20 @@ public class LocalCatalogImportService {
 
     @Transactional
     public Result importManifest(Path path) {
+        return importManifest(path, manifestBytes(path));
+    }
+
+    static byte[] manifestBytes(Path path) {
+        try { return read(path); }
+        catch (java.io.IOException e) { throw new IllegalArgumentException("catalog manifest could not be read", e); }
+    }
+
+    static Manifest parseManifest(byte[] bytes) { return JSON.readValue(bytes, Manifest.class); }
+
+    // Caller owns the transaction. Shared with the explicit preview/transition command;
+    // the manifest bytes used to confirm a plan are exactly those imported.
+    Result importManifest(Path path, byte[] manifestBytes) {
         try {
-            byte[] manifestBytes = read(path);
             Manifest manifest = JSON.readValue(manifestBytes, Manifest.class);
             require("local-catalog-import-v1".equals(manifest.contractVersion()), "unsupported contract");
             text(manifest.snapshotId(), 120);
