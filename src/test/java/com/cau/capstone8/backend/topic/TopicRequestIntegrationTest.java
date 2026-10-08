@@ -103,15 +103,28 @@ class TopicRequestIntegrationTest {
     }
 
     TopicDiscoveryService.Discovery commonDiscovery(String query,int domesticCount,int foreignCount) {
+        return commonDiscovery(query,domesticCount,foreignCount,null);
+    }
+    TopicDiscoveryService.Discovery commonDiscovery(String query,int domesticCount,int foreignCount,Integer nationalCount) {
         var found=discoveries.start(alice,query);var job=discoveries.claim();
+        var sources=new ArrayList<Map<String,Object>>();
+        sources.add(Map.of("id","yes24","status",domesticCount==0?"provider_failed":"collected","bookCount",domesticCount));
+        sources.add(Map.of("id","open_library","status","collected","bookCount",foreignCount));
+        sources.add(Map.of("id","google_books","status","provider_failed","bookCount",0,"statusCode",429));
+        if(nationalCount!=null)sources.add(Map.of("id","national_library","status","collected","bookCount",nationalCount));
         var field=Map.of("id","microeconomics","slug","field-microeconomics","name","미시경제학","englishName","Microeconomics",
             "parentCode","SRC-"+"b".repeat(16),"parentName","사회과학","registryHash","sha256:"+"a".repeat(64),
-            "bookCount",domesticCount+foreignCount,"samples",List.of(Map.of("title","Microeconomics","authors",List.of("Author"))),
-            "providers",List.of(Map.of("id","yes24","status",domesticCount==0?"provider_failed":"collected","bookCount",domesticCount),
-                Map.of("id","open_library","status","collected","bookCount",foreignCount),
-                Map.of("id","google_books","status","provider_failed","bookCount",0,"statusCode",429)));
+            "bookCount",domesticCount+foreignCount+(nationalCount==null?0:nationalCount),"samples",List.of(Map.of("title","Microeconomics","authors",List.of("Author"))),
+            "providers",sources);
         discoveries.complete(job,json.valueToTree(Map.of("provider","common-fields","query",query,"status","FOUND","groups",List.of(),"fields",List.of(field))));
         return discoveries.detail(alice,found.id());
+    }
+
+    @Test void nationalLibraryCanSupplyTheSelectedFieldWithoutOtherSources() throws Exception {
+        var found=commonDiscovery("미시경제학",0,0,2);
+        assertThat(found.fields().getFirst().providers()).hasSize(4);
+        assertThat(found.fields().getFirst().providers().getLast().id()).isEqualTo("national_library");
+        assertThat(call("POST","/api/topic-requests",aliceToken,Map.of("name","미시경제학","discoveryId",found.id(),"commonFieldId","microeconomics")).statusCode()).isEqualTo(201);
     }
 
     @Test void oldCompletedDiscoveryDoesNotHideTheNewProviderIndependentPath() {

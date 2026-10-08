@@ -29,7 +29,9 @@ class PreparationTests(unittest.TestCase):
             "parentName": "컴퓨터과학",
             "slug": "computer-networks",
         }
-        self.env = patch.dict(os.environ, {"YES24_API_KEY": "synthetic"})
+        self.env = patch.dict(
+            os.environ, {"YES24_API_KEY": "synthetic", "NL_GO_KR_API_KEY": ""}
+        )
         self.env.start()
         self.addCleanup(self.env.stop)
         google = patch.object(
@@ -496,6 +498,7 @@ class PreparationTests(unittest.TestCase):
                 "yes24": "provider_failed",
                 "open_library": "collected",
                 "google_books": "provider_failed",
+                "national_library": "not_configured",
             },
         )
         self.assertEqual(
@@ -521,6 +524,94 @@ class PreparationTests(unittest.TestCase):
             adapter.collect(
                 self.common_payload(field, query), self.directory / "request-1"
             )
+
+    def test_national_library_enriches_discovery_and_replays_into_handoff(self):
+        response = {
+            "docs": [
+                {
+                    "TITLE": "미시경제학 입문",
+                    "EA_ISBN": "9780306406157",
+                    "AUTHOR": "Synthetic Author",
+                    "SUBJECT": "미시경제학",
+                    "KDC": "320",
+                    "BOOK_TB_CNT": "제1장 수요와 공급\n1.1 균형 가격",
+                    "BOOK_INTRODUCTION": "가상 책소개",
+                }
+            ]
+        }
+        with (
+            patch.dict(os.environ, {"NL_GO_KR_API_KEY": "synthetic-nl-key"}),
+            patch.object(
+                adapter.NationalLibraryCollector, "search_scope", return_value=response
+            ) as nl,
+        ):
+            field, query, found = self.common_discovery()
+            self.assertEqual(found["fields"][0]["bookCount"], 2)
+            nl.assert_called_once()
+            self.assertEqual(nl.call_args.args[0]["title"], "미시경제학")
+            result = adapter.collect(
+                self.common_payload(field, query), self.directory / "request-1"
+            )
+            nl.assert_called_once()
+        canonical = Path(result["importManifest"]).parents[1] / "canonical"
+        dataset = adapter.read_dataset(canonical)
+        self.assertEqual(len(dataset.books), 2)
+        self.assertTrue(any(s.provider == "national_library" for s in dataset.sources))
+        self.assertTrue(dataset.toc)
+        self.assertFalse(adapter.validate_dataset(dataset))
+        for path in self.directory.rglob("*.json"):
+            self.assertNotIn("synthetic-nl-key", path.read_text())
+
+    def test_national_library_failure_preserves_other_sources(self):
+        with (
+            patch.dict(os.environ, {"NL_GO_KR_API_KEY": "synthetic-nl-key"}),
+            patch.object(
+                adapter.NationalLibraryCollector,
+                "search_scope",
+                side_effect=adapter.InvalidProviderResponse("invalid key"),
+            ),
+        ):
+            _, _, found = self.common_discovery()
+        self.assertEqual(found["fields"][0]["bookCount"], 2)
+        report = {p["id"]: p for p in found["fields"][0]["providers"]}
+        self.assertEqual(report["national_library"]["status"], "provider_failed")
+
+    def test_national_library_refresh_uses_new_env_key_and_preserves_old_books(self):
+        field, query, _ = self.common_discovery()
+        result = adapter.collect(
+            self.common_payload(field, query), self.directory / "request-1"
+        )
+        selection = Path(result["selectionManifest"])
+        payload = self.common_payload(field, query) | {
+            "refreshId": "00000000-0000-0000-0000-000000000012",
+            "providers": ["national_library"],
+            "baselineSelection": json.loads(selection.read_text())["snapshot_id"],
+            "baselineSelectionHash": adapter.digest(selection.read_bytes()),
+        }
+        with (
+            patch.dict(os.environ, {"NL_GO_KR_API_KEY": "synthetic-nl-key"}),
+            patch.object(
+                adapter.NationalLibraryCollector,
+                "search_scope",
+                return_value={
+                    "docs": [
+                        {
+                            "TITLE": "미시경제학 새 책",
+                            "EA_ISBN": "9780262033848",
+                            "AUTHOR": "Author",
+                        }
+                    ]
+                },
+            ) as nl,
+        ):
+            updated = adapter.refresh_catalog(payload, self.directory)
+            self.assertEqual(updated["bookCount"], 3)
+            self.assertEqual(
+                updated["providers"]["national_library"]["status"], "collected"
+            )
+            self.assertEqual(nl.call_args.args[0]["title"], "미시경제학")
+            self.assertEqual(adapter.refresh_catalog(payload, self.directory), updated)
+            nl.assert_called_once()
 
     def test_common_field_refresh_uses_korean_query_even_when_requested_in_english(
         self,

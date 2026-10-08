@@ -127,21 +127,22 @@ public class TopicDiscoveryService {
                 || !field.path("parentCode").asString().matches("SRC-[0-9a-f]{16}")
                 || !field.path("registryHash").asString().matches("sha256:[0-9a-f]{64}")
                 || !validLabel(field.path("name")) || !validLabel(field.path("englishName")) || !validLabel(field.path("parentName"))
-                || field.path("bookCount").asInt()<1 || field.path("bookCount").asInt()>60
-                || !field.path("providers").isArray() || field.path("providers").size()!=3
+                || field.path("bookCount").asInt()<1 || field.path("bookCount").asInt()>80
+                || !field.path("providers").isArray() || field.path("providers").size()<3 || field.path("providers").size()>4
                 || !field.path("samples").isArray() || field.path("samples").size()>4)
                 throw new IllegalArgumentException("invalid common field scope");
             var sources=new HashSet<String>();int count=0;
             for(var source:field.path("providers")) {
-                if(!Set.of("yes24","open_library","google_books").contains(source.path("id").asString())
-                    || !sources.add(source.path("id").asString()) || !Set.of("collected","provider_failed").contains(source.path("status").asString())
+                if(!Set.of("yes24","open_library","google_books","national_library").contains(source.path("id").asString())
+                    || !sources.add(source.path("id").asString()) || !Set.of("collected","provider_failed","not_configured").contains(source.path("status").asString())
+                    || ("not_configured".equals(source.path("status").asString()) && !"national_library".equals(source.path("id").asString()))
                     || source.path("bookCount").asInt()<0 || source.path("bookCount").asInt()>20
-                    || ("provider_failed".equals(source.path("status").asString()) && source.path("bookCount").asInt()!=0)
+                    || (!"collected".equals(source.path("status").asString()) && source.path("bookCount").asInt()!=0)
                     || (source.has("statusCode") && (source.path("statusCode").asInt()<100 || source.path("statusCode").asInt()>599)))
                     throw new IllegalArgumentException("invalid common field sources");
                 count+=source.path("bookCount").asInt();
             }
-            if(count<field.path("bookCount").asInt())throw new IllegalArgumentException("invalid common field count");
+            if(!sources.containsAll(Set.of("yes24","open_library","google_books")) || count<field.path("bookCount").asInt())throw new IllegalArgumentException("invalid common field count");
         }
         if(status.equals("FOUND")==seen.isEmpty())throw new IllegalArgumentException("discovery result count differs");
         int updated=jdbc.update("UPDATE backend.topic_discovery SET status=?,result=cast(? as jsonb),claim_token=null,lease_until=null,updated_at=now() WHERE id=? AND status='SEARCHING' AND claim_token=? AND lease_until>now()",status,json.writeValueAsString(result),job.id(),job.token());

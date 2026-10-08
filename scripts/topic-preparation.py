@@ -23,6 +23,7 @@ sys.path.insert(0, str(PIPELINE / "src"))
 
 import httpx
 from data_pipeline.collection_scope import (
+    CollectionScope,
     collection_scope,
     common_field_scope,
     google_books_parameters,
@@ -33,11 +34,13 @@ from data_pipeline.collection_scope import (
 )
 from data_pipeline.collectors.base import InvalidProviderResponse
 from data_pipeline.collectors.google_books import GoogleBooksCollector
+from data_pipeline.collectors.national_library import NationalLibraryCollector
 from data_pipeline.collectors.open_library import OpenLibraryCollector
 from data_pipeline.collectors.yes24 import Yes24Collector
 from data_pipeline.common_fields import common_field, resolve_common_field
 from data_pipeline.diagnostics import NormalizationDiagnostics
 from data_pipeline.models import CanonicalDataset
+from data_pipeline.national_library import normalize_national_library_response
 from data_pipeline.normalizers import normalize_yes24_response
 from data_pipeline.query_discovery import discover_categories, discovery_policy
 from data_pipeline.storage import (
@@ -137,15 +140,20 @@ def discover(payload, workspace):
     spec, scope = field.spec(), common_field_scope(field)
     dataset = CanonicalDataset(books=[], documents=[], toc=[], sources=[])
     report, raw_hashes = {}, []
-    providers = ("yes24", "open_library", "google_books")
+    providers = ("yes24", "open_library", "google_books", "national_library")
     # Independent sources run together; a slow unavailable source cannot consume the
     # combined worker timeout before another source even gets a chance to respond.
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {
             provider: executor.submit(common_provider_catalog, field, provider, run)
             for provider in providers
         }
         for provider in providers:
+            if provider == "national_library" and not os.environ.get(
+                "NL_GO_KR_API_KEY"
+            ):
+                report[provider] = {"status": "not_configured", "bookCount": 0}
+                continue
             try:
                 artifact, fresh, decisions = futures[provider].result()
                 raw_hashes.append(artifact.content_hash)
@@ -245,6 +253,22 @@ def discover(payload, workspace):
 
 def common_provider_catalog(field, provider, run):
     spec, scope = field.spec(), common_field_scope(field)
+    if provider == "national_library":
+        if not os.environ.get("NL_GO_KR_API_KEY"):
+            return None
+        artifact, _ = collect_foreign_artifact(
+            provider,
+            NationalLibraryCollector,
+            NationalLibraryCollector.query_parameters(field.korean_query),
+            run,
+            run,
+            spec.slug,
+            fresh=True,
+        )
+        fresh, decisions = normalize_national_library_response(
+            artifact.response, scope, spec, artifact.retrieved_at
+        )
+        return artifact, fresh, decisions
     if provider == "yes24":
         artifact = common_domestic_artifact(field, run)
         diagnostics = NormalizationDiagnostics(provider="yes24")
@@ -402,11 +426,11 @@ def collect_foreign_artifact(
         ):
             save(pointer, json.loads(prior.read_text()))
             return artifact, "previous_run"
-    kwargs = (
-        {"api_key": os.environ.get("GOOGLE_BOOKS_API_KEY")}
-        if provider == "google_books"
-        else {}
-    )
+    key_name = {
+        "google_books": "GOOGLE_BOOKS_API_KEY",
+        "national_library": "NL_GO_KR_API_KEY",
+    }.get(provider)
+    kwargs = {"api_key": os.environ.get(key_name)} if key_name else {}
     with collector_class(**kwargs) as collector:
         response = collector.search_scope(parameters)
     artifact = RawArtifact(
@@ -566,6 +590,62 @@ def collect(payload, directory):
             },
         )
     # Keep rejected candidates/counts and raw evidence even when nothing is publishable.
+    if not discovery:
+        scope = CollectionScope(
+            query=spec.korean_query or payload["name"],
+            source_provider="common",
+            source_category="",
+            subject=spec.slug,
+            english_query=None,
+            evidence_pattern=None,
+            book_kind=None,
+            audience=None,
+            mapping_basis="reviewed_topic",
+            foreign_status="unmapped_language",
+        )
+    if os.environ.get("NL_GO_KR_API_KEY"):
+        try:
+            nl_artifact, replay = collect_foreign_artifact(
+                "national_library",
+                NationalLibraryCollector,
+                NationalLibraryCollector.query_parameters(scope.query),
+                run,
+                directory,
+                slug,
+            )
+            extra, audit = normalize_national_library_response(
+                nl_artifact.response, scope, spec, nl_artifact.retrieved_at
+            )
+            previous_count = len(dataset.books)
+            dataset, overlaps = merge_scope_catalogs(dataset, extra)
+            raw_hashes.append(nl_artifact.content_hash)
+            provider_report["national_library"] = {
+                "status": "collected",
+                "bookCount": len(extra.books),
+                "addedBookCount": len(dataset.books) - previous_count,
+                "rawSha256": nl_artifact.content_hash,
+                "rawReuse": replay,
+            }
+            save(
+                run / "national-library-filter-audit.json",
+                {"decisions": audit, "overlaps": overlaps},
+            )
+        except (httpx.HTTPError, InvalidProviderResponse) as exc:
+            provider_report["national_library"] = {
+                "status": "provider_failed",
+                "bookCount": 0,
+                "kind": type(exc).__name__,
+            }
+            if isinstance(exc, httpx.HTTPStatusError):
+                provider_report["national_library"]["statusCode"] = (
+                    exc.response.status_code
+                )
+    else:
+        provider_report["national_library"] = {
+            "status": "not_configured",
+            "bookCount": 0,
+        }
+    save(run / "provider-report.json", provider_report)
     save(
         run / "filter-audit.json",
         vars(diagnostics)
@@ -791,7 +871,8 @@ def refresh_catalog(payload, workspace):
     if (
         not requested
         or len(set(requested)) != len(requested)
-        or not set(requested) <= {"yes24", "open_library", "google_books"}
+        or not set(requested)
+        <= {"yes24", "open_library", "google_books", "national_library"}
     ):
         raise ValueError("invalid_refresh_providers")
     run.mkdir(parents=True, exist_ok=True)
@@ -807,7 +888,13 @@ def refresh_catalog(payload, workspace):
     raw_hashes = list(selected["topics"][0]["raw_sha256"])
     before = len(dataset.books)
     for provider in requested:
-        if provider != "yes24" and scope.foreign_status != "ready":
+        if provider == "national_library" and not os.environ.get("NL_GO_KR_API_KEY"):
+            report[provider] = {"status": "not_configured", "bookCount": 0}
+            continue
+        if (
+            provider not in {"yes24", "national_library"}
+            and scope.foreign_status != "ready"
+        ):
             report[provider] = {"status": scope.foreign_status, "bookCount": 0}
             continue
         try:
@@ -853,6 +940,19 @@ def refresh_catalog(payload, workspace):
                         diagnostics.edition_mismatch_book_ids
                     )
                 }
+            elif provider == "national_library":
+                artifact, _ = collect_foreign_artifact(
+                    provider,
+                    NationalLibraryCollector,
+                    NationalLibraryCollector.query_parameters(domestic_query),
+                    run,
+                    run,
+                    spec.slug,
+                    fresh=True,
+                )
+                fresh, audit = normalize_national_library_response(
+                    artifact.response, scope, spec, artifact.retrieved_at
+                )
             else:
                 collector, parameters, normalize = {
                     "open_library": (
@@ -934,7 +1034,9 @@ def main():
     load_dotenv(ROOT / "Question-Generation" / ".env", override=False)
     payload = json.load(sys.stdin)
     request_id = int(payload["requestId"])
-    if request_id == 0 or (request_id < 0 and payload["action"] not in {"concepts", "questions", "review"}):
+    if request_id == 0 or (
+        request_id < 0 and payload["action"] not in {"concepts", "questions", "review"}
+    ):
         raise ValueError("invalid_request_id")
     workspace = Path(sys.argv[1]).resolve()
     if payload["action"] == "discover":

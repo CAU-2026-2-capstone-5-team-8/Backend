@@ -22,7 +22,7 @@ public class TopicCatalogRefreshService {
     private final CatalogSelectionService selections;
     private final boolean enabled;
     private final JsonMapper json=JsonMapper.builder().build();
-    private static final List<String> PROVIDERS=List.of("yes24","open_library","google_books");
+    private static final List<String> PROVIDERS=List.of("yes24","open_library","google_books","national_library");
     public TopicCatalogRefreshService(JdbcTemplate jdbc,TopicPreparationAdapter adapter,DiscoveryCatalogImportService imports,
             CatalogSelectionService selections,@Value("${topic-preparation.enabled:false}") boolean enabled) {
         this.jdbc=jdbc;this.adapter=adapter;this.imports=imports;this.selections=selections;this.enabled=enabled;
@@ -147,7 +147,8 @@ public class TopicCatalogRefreshService {
         if(missing!=0)throw new IllegalArgumentException("refresh dropped existing books");
         int previous=jdbc.queryForObject("SELECT count(*) FROM backend.catalog_selection_member WHERE snapshot_id=? AND topic_id=? AND included",Integer.class,job.baseline(),job.topicId());
         var reports=providers(result.path("providers"));
-        if(reports.stream().anyMatch(p->!Set.of("collected","provider_failed","unmapped_language","unmapped_category").contains(p.status())))throw new IllegalArgumentException("invalid provider status");
+        if(reports.stream().anyMatch(p->!Set.of("collected","provider_failed","unmapped_language","unmapped_category").contains(p.status())
+            && !(p.id().equals("national_library") && (p.status().equals("not_configured") || (p.status().equals("not_collected") && !job.providers().contains(p.id()))))))throw new IllegalArgumentException("invalid provider status");
         String status=reports.stream().anyMatch(p->p.status().equals("provider_failed"))?"PARTIAL":"COMPLETE";
         // Keep only the public status projection; private raw paths and exception details stay in the workspace.
         jdbc.update("UPDATE backend.topic_catalog_refresh SET status=?,report=cast(? as jsonb),added_book_count=?,published_selection=?,claim_token=null,lease_until=null,updated_at=now() WHERE id=?",

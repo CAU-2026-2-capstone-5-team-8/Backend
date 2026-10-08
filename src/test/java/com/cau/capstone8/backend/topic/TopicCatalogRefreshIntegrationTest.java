@@ -75,7 +75,7 @@ class TopicCatalogRefreshIntegrationTest {
         assertThat(call("POST",secondToken,Map.of("mode","ALL")).statusCode()).isEqualTo(202);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.topic_catalog_refresh",Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.catalog_visible_book_topic WHERE topic_id=9501",Integer.class)).isEqualTo(1);
-        assertThat(catalogs.claim()).isNotNull();
+        assertThat(catalogs.claim().providers()).containsExactly("yes24","open_library","google_books","national_library");
         assertThat(preparation.claim()).isNull();assertThat(discovery.claim()).isNull();assertThat(catalogs.claim()).isNull();
         assertThat(catalogs.state(9501).status()).isEqualTo("RUNNING");
     }
@@ -116,7 +116,7 @@ class TopicCatalogRefreshIntegrationTest {
     String fileHash(Path path) throws Exception {return "sha256:"+HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));}
     tools.jackson.databind.JsonNode result(TopicCatalogRefreshService.Job job,int count) {
         return json.valueToTree(Map.of("status","COLLECTED","slug",slug,"baselineSelection",baseline,"bookCount",count,"refreshedProviders",job.providers(),
-                "providers",Map.of("yes24",Map.of("status","collected"),"open_library",Map.of("status","collected"),"google_books",Map.of("status","provider_failed","statusCode",429))));
+                "providers",Map.of("yes24",Map.of("status","collected"),"open_library",Map.of("status","collected"),"google_books",Map.of("status","provider_failed","statusCode",429),"national_library",Map.of("status","not_configured","bookCount",0))));
     }
     @Test void publicationRollsBackAnyRemovalAndPublishesPartialSupplementWithoutDiagnosis() throws Exception {
         catalogs.start(user,9501,new TopicCatalogRefreshService.Input("ALL"));var job=catalogs.claim();var dropped=handoff(job,false);
