@@ -179,7 +179,9 @@ public class LocalCatalogImportService {
 
     long book(CanonicalBook book) {
         String isbn = book.isbn13() == null ? book.isbn10() : book.isbn13();
-        String author = String.join(", ", book.authors());
+        // Canonical [] explicitly means unavailable; preserve it in the immutable handoff.
+        // The current display column is non-null/nonblank, so use a visible missing-value label.
+        String author = book.authors().isEmpty() ? "저자 정보 없음" : String.join(", ", book.authors());
         text(author, 200);
         var rows = jdbc.queryForList("select id,ml_book_id,isbn,title,author from backend.book where ml_book_id=? or isbn=?",
                 book.bookId(), isbn);
@@ -260,7 +262,7 @@ public class LocalCatalogImportService {
     static void validateBook(CanonicalBook b, String topic) {
         text(b.bookId(), 200);
         text(b.title(), 300);
-        require(b.authors() != null && !b.authors().isEmpty(), "selected book needs an author");
+        require(b.authors() != null, "canonical authors array required");
         b.authors().forEach(a -> text(a, 200));
         require(b.topics() != null && b.topics().contains(topic), "canonical topic mismatch");
         if (b.isbn13() != null) {

@@ -724,7 +724,7 @@ def write_handoff(payload, run, dataset, raw_hashes, revision, code_hash, snapsh
         "topics": [
             {
                 "topic": {
-                    "code": "AUTO-" + slug,
+                    "code": payload.get("topicCode", "AUTO-" + slug),
                     "name": payload["name"],
                     "parent_code": payload["parentCode"],
                     "parent_name": payload["parentName"],
@@ -784,6 +784,10 @@ def catalog_baseline(payload, workspace):
     paths = list(workspace.glob("request-*/*/handoff/selection.json"))
     paths += list(workspace.glob("catalog-refresh/*/handoff/selection.json"))
     for selection_path in paths:
+        # Legacy analysis copies duplicate the selection but omit its collection policy.
+        # Only a collection workspace can supply the baseline for another refresh.
+        if selection_path.parents[1].name in {"content-source", "content-english"}:
+            continue
         selected = json.loads(selection_path.read_text())
         if selected["snapshot_id"] != payload["baselineSelection"]:
             continue

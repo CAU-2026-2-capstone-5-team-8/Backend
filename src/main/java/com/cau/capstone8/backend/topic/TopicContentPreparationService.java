@@ -34,8 +34,8 @@ public class TopicContentPreparationService {
                 UPDATE backend.topic_content_preparation SET status='FAILED',claim_token=null,lease_until=null,updated_at=now()
                 WHERE status='PREPARING' AND lease_until<now()
                 """);
-        // Only catalogs published by the request worker qualify. Existing manually prepared
-        // question banks and topics remain untouched. Resolve the ORIGINAL source request.
+        // Request-worker catalogs and explicitly staged legacy backfills qualify.
+        // Other manually prepared catalogs remain untouched. Resolve the ORIGINAL source request.
         jdbc.update("""
                 INSERT INTO backend.topic_content_preparation(topic_id,source_snapshot_id,source_request_id)
                 SELECT c.topic_id,d.snapshot_id,r.id FROM backend.catalog_selection_current c
@@ -44,6 +44,7 @@ public class TopicContentPreparationService {
                 LEFT JOIN backend.topic_request r ON r.topic_id=c.topic_id AND r.status='BOOKS_READY'
                     AND d.snapshot_id LIKE 'topic-request-'||r.id||'-%'
                 WHERE d.snapshot_id LIKE 'topic-request-%' OR d.snapshot_id LIKE 'book-search-%'
+                    OR d.snapshot_id LIKE 'catalog-backfill-%'
                 ON CONFLICT DO NOTHING
                 """);
         if (jdbc.queryForObject("""

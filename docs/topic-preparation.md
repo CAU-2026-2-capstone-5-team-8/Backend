@@ -449,3 +449,63 @@ questions, answer keys and issued snapshots remain unchanged.
 새 생성 설정 `concept-question-generation-config-v3`는 수식 내용을 바꾸지 않고
 닫힌 달러 수식을 화면의 표준 구분자로 정규화한다. ML/QG/Backend가 이 버전을 함께
 읽으며 기존 v1/v2 아티팩트는 그대로 보존한다. 운영 화면의 추천 기본값 변경은 없다.
+
+
+## 기존 수집 분야를 준비 작업에 연결하기 (2026-10-08)
+
+예전에 일괄 import한 분야는 요청 작업의 수집본이 아니므로 자동 준비 대상이 아니었다.
+`prepare-existing-catalog.py`는 명시적으로 선택한 분야의 기존 공개 도서만 별도 작업
+폴더로 복사한다. 원본 import/selection 해시, 네 canonical 파일의 해시와 전체 선택
+목록을 확인하며 재수집하거나 원본을 수정하지 않는다. 분야 코드와 기존 책 ID도 보존한다.
+
+Backend 디렉터리에서 원본 manifest와 선택 manifest에 대응하는 canonical 폴더를 지정한다.
+아래 경로와 분야는 적용 대상에 맞춰 바꾼다. 출력 폴더는 새 경로여야 한다.
+
+```sh
+../Data-Pipeline/.venv/bin/python scripts/prepare-existing-catalog.py \
+  --source-manifest /absolute/path/catalog-manifest.json \
+  --selection-manifest /absolute/path/selection.json \
+  --canonical-topics-dir /absolute/path/topics \
+  --topic operating-systems --topic algorithms \
+  --output .local/topic-preparation/catalog-backfill/reviewed-run
+```
+
+DB를 백업하고 준비 worker를 중단한 뒤, 출력된 `plan.json`을 기존 DB 환경 설정으로 적용한다.
+웹 서버나 다른 bootstrap/import 프로필과 함께 실행할 수 없다.
+
+```sh
+java -jar build/libs/backend-0.0.1-SNAPSHOT.jar \
+  --spring.profiles.active=existing-catalog-preparation \
+  --spring.main.web-application-type=none \
+  --topic-preparation.enabled=false \
+  --existing-catalog-preparation.plan-path=/absolute/path/plan.json
+```
+
+전체 계획을 하나의 트랜잭션으로 처리한다. 현재 선택이 계획의 기준과 달라졌거나, 공개
+책 ID가 하나라도 추가/제거되거나, 대상에 활성 문항이 있으면 거부한다. 뒤쪽 분야에서
+파일 읽기가 실패해도 앞쪽 분야까지 롤백한다. 아직 활성화되지 않은 같은 계획은 재실행할
+수 있지만, 다른 선택이나 활성 진단을 덮어쓰는 용도로 쓸 수 없다. 이전 선택·수집 이력과
+사용자 진단 기록은 삭제하지 않는다.
+
+정상 설정으로 worker를 다시 켜면 `catalog-backfill-` 수집본도 기존 목차 번역 → 개념 연결
+→ 문제 생성 → AI 검토 → 활성화 경로를 사용한다. 준비 상태와 실패 시 이어서 시도 버튼은
+기존 분야에도 표시된다. 일반 local 서버 재시작은 DB에 선택이 이미 있으면 예전 bootstrap
+manifest를 다시 활성화하지 않는다. 수동 선택 변경은 기존 `catalog-selection-import`
+프로필로 명시적으로 실행한다.
+
+### 갱신 중 확인한 호환성
+
+- 갱신 기준을 찾을 때 과거 `content-source`/`content-english` 분석 사본은 제외한다.
+  수집 원본의 정책·선택·해시 검사는 계속 적용한다.
+- canonical `authors: []`는 저자 정보 부재로 보존하고, 앱 표시용 DB 컬럼에만
+  `저자 정보 없음`을 쓴다. 한 권의 미제공 저자 때문에 전체 분야 갱신을 거부하지 않는다.
+  실제로 제공된 공백 저자나 기존 ISBN/책 ID의 메타데이터 충돌은 계속 거부한다.
+- 신규 표지를 추가 수집하거나 내려받지 않는다. 이번 변경은 목차 준비와 수집 복구 대상이다.
+
+### 검증 범위
+
+합성 DB 테스트는 도서 보존, 활성 진단 보호, 기준 변경 거부, 같은 계획 재실행,
+중간 파일 오류의 전체 롤백, 서버 재시작 시 선택 보존을 확인한다. Python 테스트는
+원본 해시 변경 거부와 분석 사본이 갱신 원본을 가리는 회귀를 확인한다.
+AI 승인과 사람의 문항 검토·추천 품질 평가는 별개다. 준비 작업을 연결했다는 사실만으로
+모든 분야의 진단 완료나 매칭 정확도 향상을 주장하지 않는다.
