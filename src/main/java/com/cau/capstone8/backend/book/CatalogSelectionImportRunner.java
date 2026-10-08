@@ -15,11 +15,17 @@ import tools.jackson.databind.json.JsonMapper;
 public class CatalogSelectionImportRunner implements ApplicationRunner {
     private final CatalogSelectionService service;
     private final Path manifest;
+    private final boolean bootstrap;
     public CatalogSelectionImportRunner(CatalogSelectionService service,
-            @Value("${catalog-selection.manifest-path}") String manifest) {
+            @Value("${catalog-selection.manifest-path}") String manifest,
+            org.springframework.core.env.Environment environment) {
         this.service=service; this.manifest=Path.of(manifest);
+        this.bootstrap=environment.acceptsProfiles(org.springframework.core.env.Profiles.of("local"));
     }
     @Override public void run(ApplicationArguments args) {
+        // A normal restart must not replace later provider refreshes or prepared catalogs.
+        // Explicit catalog-selection-import remains the operator's activation command.
+        if (bootstrap && !service.current().isEmpty()) return;
         System.out.println("CATALOG_SELECTION_RESULT="+new JsonMapper().writeValueAsString(service.activate(manifest)));
     }
 }

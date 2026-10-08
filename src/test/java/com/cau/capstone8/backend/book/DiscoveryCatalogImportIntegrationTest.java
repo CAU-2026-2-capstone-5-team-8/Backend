@@ -87,6 +87,18 @@ class DiscoveryCatalogImportIntegrationTest {
         manifest.put("snapshot_id","synthetic-discovery-v1");
         assertThatThrownBy(()->importer.importManifest(manifest())).hasMessageContaining("different immutable input");
     }
+    @Test void unavailableAuthorDoesNotRejectTheWholeCatalogOrInventCanonicalMetadata() throws Exception {
+        String original=Files.readString(dir.resolve("OS-books")).replace("[\"Synthetic author\"]","[]");
+        write("OS-books",original);
+        os.put("books_sha256",hash("OS-books"));
+        var hashes=new LinkedHashMap<>((Map<String,String>)os.get("canonical_hashes"));
+        hashes.put("books.jsonl",hash("OS-books"));os.put("canonical_hashes",hashes);
+        assertThat(importer.importManifest(manifest()).bookCount()).isEqualTo(2);
+        assertThat(importer.importManifest(manifest()).replayed()).isTrue();
+        assertThat(jdbc.queryForObject("select author from backend.book where ml_book_id=?",String.class,b)).isEqualTo("저자 정보 없음");
+        assertThat(Files.readString(dir.resolve("OS-books"))).isEqualTo(original);
+        assertThat(jdbc.queryForObject("select count(*) from backend.book_ranking_v2_projection",Integer.class)).isEqualTo(1);
+    }
     @Test void explicitLegacyAcknowledgmentReusesIdenticalProjectionWithoutChangingSource() throws Exception {
         var old=new LinkedHashMap<String,Object>(Map.of("contract_version","local-catalog-import-v1","snapshot_id","synthetic-old-v1","books_path","LA-books","books_sha256",hash("LA-books"),"candidates_path","LA-candidates","candidates_sha256",hash("LA-candidates"),"selected_book_ids",List.of(a),"topic",mapping("LA","linear-algebra")));
         write("old-manifest",json.writeValueAsString(old));var original=legacy.importManifest(dir.resolve("old-manifest"));

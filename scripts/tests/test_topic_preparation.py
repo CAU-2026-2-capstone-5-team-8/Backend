@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -384,6 +385,24 @@ class PreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "baseline_books_changed"):
             adapter.refresh_catalog(payload, self.directory)
         self.google_search.assert_not_called()
+
+    def test_refresh_ignores_analysis_copy_and_verifies_original_collection(self):
+        payload = self.refresh_payload()
+        result = adapter.refresh_catalog(payload, self.directory)
+        selection = Path(result["selectionManifest"])
+        refreshed = payload | {
+            "baselineSelection": json.loads(selection.read_text())["snapshot_id"],
+            "baselineSelectionHash": adapter.digest(selection.read_bytes()),
+        }
+        # Old content preparation copied only handoff/canonical into this location.
+        analysis = self.directory / "request--11" / "content-source"
+        shutil.copytree(selection.parent, analysis / "handoff")
+        shutil.copytree(selection.parents[1] / "canonical", analysis / "canonical")
+        baseline, *_ = adapter.catalog_baseline(refreshed, self.directory)
+        self.assertEqual(baseline, selection.parents[1])
+        (baseline / "discovery-policy.json").unlink()
+        with self.assertRaisesRegex(ValueError, "baseline_scope_missing"):
+            adapter.catalog_baseline(refreshed, self.directory)
 
     def common_discovery(self, domestic_failure=False):
         field = adapter.common_field("microeconomics")
