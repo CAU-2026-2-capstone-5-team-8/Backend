@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Run in ML's environment, with private credentials inherited from the parent adapter.
 
-Only the canonical field name is sent to Gemini. Book text, TOCs, user descriptions,
-accounts and identifiers never leave the machine in this content stage.
+The outline call sends only the field name. A separate bounded translator sends
+untranslated TOC headings and their context; original records remain immutable.
 """
 
 import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -240,6 +241,24 @@ def main():
     directory = Path(sys.argv[1]).resolve() / f"request-{int(payload['requestId'])}"
     slug, snapshot = payload["slug"], payload["sourceSnapshotId"]
     canonical, import_path, manifest = resolve_source(directory, snapshot, slug)
+    translated = subprocess.run(
+        [
+            str(ROOT / "Data-Pipeline/.venv/bin/python"),
+            str(Path(__file__).with_name("topic-toc-translation.py")),
+            str(canonical),
+            str(directory),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=145,
+        check=True,
+    )
+    english = json.loads(translated.stdout)
+    if english["status"] == "PREPARING":
+        return {"status": "PREPARING", "slug": slug, "sourceSnapshotId": snapshot}
+    if english["status"] != "READY":
+        raise ValueError("invalid_translation_status")
+    canonical = Path(english["canonicalDataPath"]).resolve(strict=True)
     topic_name = manifest["topics"][0]["topic"]["name"]
     model = os.getenv("QUESTION_GENERATION_MODEL", "gemini-3.5-flash-lite")
     proposal_dir = directory / "content-proposals"
@@ -248,6 +267,7 @@ def main():
     identity = {
         "sourceSnapshotId": snapshot,
         "sourceManifestHash": digest(import_path.read_bytes()),
+        "englishPreparation": english["identity"],
         "outlineCacheHash": digest(cache.read_bytes()),
         "canonicalHashes": {
             p.name: digest(p.read_bytes()) for p in sorted(canonical.glob("*.jsonl"))

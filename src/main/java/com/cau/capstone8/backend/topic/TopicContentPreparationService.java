@@ -171,6 +171,17 @@ public class TopicContentPreparationService {
     }
 
     @Transactional
+    public void defer(Job job) {
+        int changed=jdbc.update("""
+                UPDATE backend.topic_content_preparation p SET status='QUEUED',claim_token=null,lease_until=null,updated_at=now()
+                FROM backend.catalog_selection_current c JOIN backend.catalog_selection_snapshot s ON s.snapshot_id=c.snapshot_id
+                WHERE p.topic_id=? AND p.source_snapshot_id=? AND p.status='PREPARING' AND p.claim_token=? AND p.lease_until>now()
+                    AND c.topic_id=p.topic_id AND s.manifest->>'source_snapshot_id'=p.source_snapshot_id
+                """,job.topicId(),job.snapshotId(),job.token());
+        require(changed==1,"content claim expired or active catalog changed");
+    }
+
+    @Transactional
     public void fail(Job job) {
         jdbc.update("""
                 UPDATE backend.topic_content_preparation SET status='FAILED',claim_token=null,lease_until=null,updated_at=now()

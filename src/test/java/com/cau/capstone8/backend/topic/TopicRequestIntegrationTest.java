@@ -43,6 +43,19 @@ class TopicRequestIntegrationTest {
         jdbc.update("INSERT INTO backend.topic(id,code,name) VALUES (9001,'CS','컴퓨터과학'),(9003,'MAT','수학')");
         jdbc.update("INSERT INTO backend.topic(id,code,name,parent_id,ml_topic_id) VALUES (9002,'OS','운영체제',9001,'operating-systems')");
     }
+    @Test void knownTopicCanStartFromAnEmptyCatalogWithoutDemoSeeds() throws Exception {
+        jdbc.execute("TRUNCATE backend.topic CASCADE");
+        var submitted=call("POST","/api/topic-requests",aliceToken,Map.of("name","컴퓨터 네트워크"));
+        assertThat(submitted.statusCode()).isEqualTo(201);
+        var job=preparation.claim();
+        var classified=preparation.classify(job,"CS");
+        assertThat(classified.parentName()).isEqualTo("컴퓨터과학");
+        assertThat(preparation.resolved(classified,"computer-networks")).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.topic WHERE code='CS' AND parent_id IS NULL",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.book",Integer.class)).isZero();
+        preparation.fail(classified);
+    }
+
     long user(String name, String token) {
         long id = jdbc.queryForObject("INSERT INTO backend.app_user(display_name) VALUES (?) RETURNING id", Long.class, name);
         jdbc.update("INSERT INTO backend.user_account(user_id,email,password_hash) VALUES (?,?,?)", id, name.toLowerCase(Locale.ROOT)+"@example.com", "synthetic-not-for-login");
@@ -518,6 +531,18 @@ class TopicRequestIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.question",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.book_ranking_v2_projection",Integer.class)).isZero();
     }
+    @Test void boundedTranslationCanContinueButExpiredClaimsCannotRequeueContent() {
+        seedContentCatalog();
+        var first=content.claim();content.defer(first);
+        var second=content.claim();
+        assertThat(second.topicId()).isEqualTo(first.topicId());
+        assertThat(second.token()).isNotEqualTo(first.token());
+        assertThatThrownBy(()->content.defer(first)).hasMessageContaining("claim expired");
+        jdbc.update("UPDATE backend.topic_content_preparation SET lease_until=now()-interval '1 second' WHERE topic_id=?",second.topicId());
+        assertThatThrownBy(()->content.defer(second)).hasMessageContaining("claim expired");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM backend.question",Integer.class)).isZero();
+    }
+
     @Test void expiredContentClaimsRecoverButOldWorkersCannotPublish() throws Exception {
         long request=seedContentCatalog(); var old=content.claim();
         jdbc.update("UPDATE backend.topic_content_preparation SET lease_until=now()-interval '1 minute'");
