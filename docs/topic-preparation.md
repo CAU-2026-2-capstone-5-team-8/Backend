@@ -1,5 +1,12 @@
 # 분야 요청과 책 준비
 
+2026-10-08: 빈 DB에서도 등록된 분야의 상위 분류를 요청 시 생성한다. 개념 분석 전에
+Data-Pipeline의 영문 목차 보완을 호출하며, 원본 수집본은 보존하고 별도 canonical 사본을
+사용한다. 한 번에 새 번역 요청 두 개만 실행하고 캐시를 이어서 사용한다. 미완료 번역이
+있으면 개념 준비를 다시 대기시켜 같은 입력으로 이어간다. 번역이 완료된 사본의 해시를
+개념 분석·문제 설계·추천 근거까지 전달한다. 번역 모델은 `TOPIC_TOC_TRANSLATION_MODEL`
+또는 기존 `QUESTION_GENERATION_MODEL`을 사용한다. 제목·본문은 이 단계의 번역 대상이 아니다.
+
 2026-10-06 로컬 통합 구현. 소비자 화면에는 기술 버전이나 해시를 노출하지 않는다.
 
 ## 구현 범위
@@ -421,3 +428,24 @@ overwriting or reusing the previous snapshot's evidence. Interrupted copies rema
 Display translation failures retry within the three-attempt budget. Publication checks passage
 presence and nonblank text/choices against the stored source and fences stale claims; original
 questions, answer keys and issued snapshots remain unchanged.
+
+### 빈 데이터에서 수집부터 추천까지 검증 (2026-10-08)
+
+기본 분류가 없는 DB에서도 알려진 분야를 저장하면 필요한 상위 분류를 생성한다.
+목차 영어 보강은 Data-Pipeline의 별도 출력과 캐시를 이용하며, 한 작업에서 새 요청을
+최대 두 개만 실행한다. 마지막 번역 호출도 다음 작업으로 넘긴 후 캐시를 읽어 개념 초안을
+만들어, 번역과 개념 생성이 같은 작업의 시간 제한을 소모하지 않게 한다.
+
+실제 로컬 검증은 책·분야·문항·프로필 0개와 빈 작업 폴더에서 시작했다.
+컴퓨터 네트워크 책 39권을 수집했고, 목차 2,475개 중 영어 필드가 있는 행은
+179개에서 2,475개로 늘었다. 원본 네 파일의 해시는 모두 그대로였다.
+같은 개념 초안에서 원문만 사용한 경우 15권, 영어 보강 후 16권이 매칭되었다.
+18개 문항의 AI 내용 검토 및 실제 프런트 수식 렌더링 검사 후 진단이 활성화되었다.
+검토 중 한 차례 실패는 정상 재시도 API로 완료된 후보와 검토를 보존하며 이어갔다.
+9문항 진단 완료 후 v1/v2 각각 meaning/application/reasoning 추천 5권 생성,
+저장·재조회·동일 요청 재사용까지 확인했다. 응답은 검증용 합성 응답이며,
+이 결과는 로컬 연동 증거다. 사람 검토나 추천 품질·진단 타당성 실험은 아니다.
+
+새 생성 설정 `concept-question-generation-config-v3`는 수식 내용을 바꾸지 않고
+닫힌 달러 수식을 화면의 표준 구분자로 정규화한다. ML/QG/Backend가 이 버전을 함께
+읽으며 기존 v1/v2 아티팩트는 그대로 보존한다. 운영 화면의 추천 기본값 변경은 없다.

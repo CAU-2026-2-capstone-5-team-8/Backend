@@ -60,6 +60,10 @@ public class TopicPreparationService {
         lock(job,"CHECKING");
         if (job.parentCode()!=null || !List.of("CS","MAT").contains(parentCode==null?"":parentCode))
             throw new IllegalArgumentException("invalid app category resolution");
+        // These are application taxonomy roots, not a preloaded book catalog.
+        // Cold databases must be able to accept the same requests as an existing installation.
+        jdbc.update("INSERT INTO backend.topic(code,name) VALUES (?,?) ON CONFLICT(code) DO NOTHING",
+                parentCode,"CS".equals(parentCode)?"컴퓨터과학":"수학");
         var categories=jdbc.queryForList("SELECT id,name FROM backend.topic WHERE code=? AND parent_id IS NULL",parentCode);
         if (categories.size()!=1) throw new IllegalArgumentException("app category unavailable");
         var category=categories.getFirst();

@@ -36,7 +36,7 @@ record GeneratedQuestionV5Handoff(
                 || !(List.of("concept-question-generation-prompt-v1", "concept-question-generation-prompt-v2").contains(promptVersion)
                         && "concept-question-generation-config-v1".equals(generationConfigVersion)
                     || "concept-question-generation-prompt-v3".equals(promptVersion)
-                        && "concept-question-generation-config-v2".equals(generationConfigVersion))
+                        && java.util.Set.of("concept-question-generation-config-v2","concept-question-generation-config-v3").contains(generationConfigVersion))
                 || !outputLanguage.matches("en(?:-[A-Za-z]{2,8})?")
                 || targetDifficulty < 1 || targetDifficulty > 3) {
             GeneratedQuestionHandoffSupport.fail("unsupported v5 contract");

@@ -42,11 +42,13 @@ class GeneratedQuestionV5ImportIntegrationTest {
             """.formatted(id, status).replace("\n", "");
     }
 
-    @Test void latestWorkerContractImportsWithoutRelabelingLegacyArtifacts() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"concept-question-generation-config-v2","concept-question-generation-config-v3"})
+    void latestWorkerContractImportsWithoutRelabelingLegacyArtifacts(String configVersion) {
         var json=tools.jackson.databind.json.JsonMapper.builder().build();
         var values=new java.util.TreeMap<String,Object>(json.readValue(generated,java.util.Map.class));
         values.put("prompt_version","concept-question-generation-prompt-v3");
-        values.put("generation_config_version","concept-question-generation-config-v2");
+        values.put("generation_config_version",configVersion);
         var identity=new java.util.TreeMap<>(values);identity.remove("generated_question_id");identity.remove("usage");
         String current="gq_"+ApprovedQuestionImportService.sha256(json.writeValueAsBytes(identity)).substring(7,39);
         values.put("generated_question_id",current);

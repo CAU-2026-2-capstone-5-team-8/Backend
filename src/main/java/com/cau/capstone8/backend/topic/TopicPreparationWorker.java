@@ -89,6 +89,11 @@ public class TopicPreparationWorker {
         var job=content.claim(); if (job==null) return false;
         try {
             var result=adapter.run(job.adapterJob(),"concepts",job.slug(),java.util.Map.of("sourceSnapshotId",job.snapshotId()));
+            if ("PREPARING".equals(result.path("status").asString())
+                    && job.slug().equals(result.path("slug").asString())
+                    && job.snapshotId().equals(result.path("sourceSnapshotId").asString())) {
+                content.defer(job); return true;
+            }
             if (!java.util.List.of("CONCEPTS_READY","NEEDS_EVIDENCE").contains(result.path("status").asString())
                     || !job.slug().equals(result.path("slug").asString())
                     || !job.snapshotId().equals(result.path("sourceSnapshotId").asString()))

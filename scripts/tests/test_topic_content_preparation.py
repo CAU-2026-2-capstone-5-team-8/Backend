@@ -1,6 +1,7 @@
 """Offline adapter tests. Mock outputs prove protocol behavior, not Gemini accuracy."""
 
 import importlib.util
+import io
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -131,6 +132,90 @@ def test_missing_source_or_wrong_field_is_rejected_before_a_model_call(tmp_path)
         adapter.find_source(tmp_path, "source", "synthetic-topic")
 
 
+def test_pending_translation_never_runs_matching_or_publishes_a_report(
+    tmp_path, monkeypatch
+):
+    payload = {"requestId": 1, "slug": "synthetic-topic", "sourceSnapshotId": "source"}
+    monkeypatch.setattr(adapter.sys, "stdin", io.StringIO(json.dumps(payload)))
+    monkeypatch.setattr(adapter.sys, "argv", ["adapter", str(tmp_path)])
+    with (
+        patch.object(adapter, "resolve_source", return_value=(tmp_path, None, {})),
+        patch.object(adapter.subprocess, "run") as translate,
+        patch.object(
+            adapter,
+            "propose_outline",
+            side_effect=AssertionError("outline before translation"),
+        ),
+        patch.object(
+            adapter,
+            "prepare_topic_content",
+            side_effect=AssertionError("matching before translation"),
+        ),
+    ):
+        translate.return_value.stdout = json.dumps({"status": "PREPARING"})
+        assert adapter.main() == {
+            "status": "PREPARING",
+            "slug": "synthetic-topic",
+            "sourceSnapshotId": "source",
+        }
+    assert not list(tmp_path.rglob("report.json"))
+
+
+def test_matching_consumes_english_copy_and_keeps_original_manifest_identity(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "original"
+    source.mkdir()
+    original = source / "toc.jsonl"
+    original.write_text('{"title":"행렬"}\n')
+    english = tmp_path / "english" / "canonical"
+    english.mkdir(parents=True)
+    (english / "toc.jsonl").write_text('{"title":"행렬","en_title":"Matrices"}\n')
+    manifest = source / "import.json"
+    manifest.write_text("{}")
+    cache = source / "outline.json"
+    cache.write_text("{}")
+    payload = {"requestId": 1, "slug": "synthetic-topic", "sourceSnapshotId": "source"}
+    (tmp_path / "request-1").mkdir()
+    monkeypatch.setattr(adapter.sys, "stdin", io.StringIO(json.dumps(payload)))
+    monkeypatch.setattr(adapter.sys, "argv", ["adapter", str(tmp_path)])
+
+    def matching(canonical, outline, output, configs, **kwargs):
+        assert canonical == english
+        assert "Matrices" in (canonical / "toc.jsonl").read_text()
+        return {"status": "CONCEPTS_READY"}
+
+    with (
+        patch.object(
+            adapter,
+            "resolve_source",
+            return_value=(
+                source,
+                manifest,
+                {"topics": [{"topic": {"name": "Synthetic Field"}}]},
+            ),
+        ),
+        patch.object(adapter.subprocess, "run") as translate,
+        patch.object(adapter, "propose_outline", return_value=(proposal(), cache)),
+        patch.object(adapter, "prepare_topic_content", side_effect=matching),
+    ):
+        translate.return_value.stdout = json.dumps(
+            {
+                "status": "READY",
+                "canonicalDataPath": str(english),
+                "identity": {"version": "test"},
+            }
+        )
+        result = adapter.main()
+    report = json.loads(Path(result["reportPath"]).read_text())
+    assert report["sourceManifestHash"] == adapter.digest(manifest.read_bytes())
+    assert report["canonicalHashes"]["toc.jsonl"] == adapter.digest(
+        (english / "toc.jsonl").read_bytes()
+    )
+    assert report["englishPreparation"] == {"version": "test"}
+    assert original.read_text() == '{"title":"행렬"}\n'
+
+
 def source_snapshot(root, snapshot):
     run = root / snapshot
     (run / "handoff").mkdir(parents=True)
@@ -138,12 +223,20 @@ def source_snapshot(root, snapshot):
     books = json.dumps({"book_id": snapshot, "title": "Synthetic book"}) + "\n"
     (run / "handoff/books.jsonl").write_text(books)
     (run / "canonical/books.jsonl").write_text(books)
-    adapter.save(run / "handoff/import.json", {
-        "snapshot_id": snapshot, "topics": [{
-            "topic": {"ml_topic_id": "synthetic-topic"}, "books_path": "books.jsonl",
-            "books_sha256": adapter.digest(books.encode()), "canonical_hashes": {}
-        }]
-    })
+    adapter.save(
+        run / "handoff/import.json",
+        {
+            "snapshot_id": snapshot,
+            "topics": [
+                {
+                    "topic": {"ml_topic_id": "synthetic-topic"},
+                    "books_path": "books.jsonl",
+                    "books_sha256": adapter.digest(books.encode()),
+                    "canonical_hashes": {},
+                }
+            ],
+        },
+    )
     return run
 
 
@@ -159,8 +252,11 @@ def test_refresh_copies_new_snapshot_without_overwriting_previous(tmp_path):
     assert adapter.resolve_source(workspace, "second", "synthetic-topic") == second
 
 
-def test_interrupted_copy_can_retry_without_publishing_partial_snapshot(tmp_path, monkeypatch):
+def test_interrupted_copy_can_retry_without_publishing_partial_snapshot(
+    tmp_path, monkeypatch
+):
     import shutil
+
     source_snapshot(tmp_path / "catalog-refresh", "snapshot")
     workspace = tmp_path / "request--1"
     original = shutil.copytree
@@ -175,4 +271,9 @@ def test_interrupted_copy_can_retry_without_publishing_partial_snapshot(tmp_path
         with pytest.raises(OSError, match="interrupted copy"):
             adapter.resolve_source(workspace, "snapshot", "synthetic-topic")
     assert list((workspace / "content-source").iterdir()) == []
-    assert adapter.resolve_source(workspace, "snapshot", "synthetic-topic")[2]["snapshot_id"] == "snapshot"
+    assert (
+        adapter.resolve_source(workspace, "snapshot", "synthetic-topic")[2][
+            "snapshot_id"
+        ]
+        == "snapshot"
+    )
