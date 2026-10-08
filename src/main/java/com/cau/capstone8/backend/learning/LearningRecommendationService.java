@@ -37,6 +37,7 @@ public class LearningRecommendationService {
     private final TopicRepository topics;
     private final AppUserRepository users;
     private final MlGateway ml;
+    private final com.cau.capstone8.backend.topic.TopicDiagnosticState diagnosticState;
     private final TransactionTemplate transactions;
     private final Duration processingLease;
 
@@ -44,8 +45,9 @@ public class LearningRecommendationService {
             BookRankingV2ProjectionRepository projections, BookRepository books, TopicRepository topics,
             AppUserRepository users, MlGateway ml,
             com.cau.capstone8.backend.account.AccountOwnership ownership,
-            PlatformTransactionManager transactionManager,
+            PlatformTransactionManager transactionManager,com.cau.capstone8.backend.topic.TopicDiagnosticState diagnosticState,
             @Value("${recommendation.processing-lease:PT30S}") Duration processingLease) {
+        this.diagnosticState=diagnosticState;
         this.runs = runs; this.profiles = profiles; this.projections = projections;
         this.books = books; this.topics = topics; this.users = users; this.ml = ml;
         this.ownership = ownership;
@@ -100,6 +102,7 @@ public class LearningRecommendationService {
         }
         var topic = topics.findById(request.topicId())
                 .orElseThrow(() -> new ResourceNotFoundException("분야를 찾을 수 없습니다."));
+        if (!diagnosticState.ready(request.topicId())) throw new RecommendationConflictException("분야의 문제 검토와 진단 준비가 진행 중이에요.");
         var profile = profiles.findLatestCompleted(request.userId(), request.topicId())
                 .orElseThrow(() -> new RecommendationConflictException("완료한 개념 진단이 필요합니다."));
         if (profile.getId() != request.profileId())

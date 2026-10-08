@@ -31,7 +31,7 @@ public class CatalogSummaryService {
         var topics = jdbc.query("""
                 WITH coverage AS (
                     SELECT DISTINCT ON (m.book_id,m.topic_id) m.book_id,m.topic_id,m.toc_entry_count
-                    FROM backend.discovery_catalog_member m
+                    FROM backend.discovery_catalog_member m JOIN backend.catalog_visible_book_topic v ON v.book_id=m.book_id AND v.topic_id=m.topic_id
                     JOIN backend.discovery_catalog_import i ON i.snapshot_id=m.snapshot_id
                     ORDER BY m.book_id,m.topic_id,i.created_at DESC,i.snapshot_id DESC
                 )
@@ -39,7 +39,7 @@ public class CatalogSummaryService {
                     count(bt.book_id) FILTER (WHERE c.toc_entry_count>0) toc_books,
                     count(p.id) candidates,
                     count(p.id) FILTER (WHERE jsonb_array_length(p.covered_concepts)>0) concept_books
-                FROM backend.topic t LEFT JOIN backend.book_topic bt ON bt.topic_id=t.id
+                FROM backend.topic t LEFT JOIN backend.catalog_visible_book_topic bt ON bt.topic_id=t.id
                 LEFT JOIN coverage c ON c.book_id=bt.book_id AND c.topic_id=t.id
                 LEFT JOIN backend.book_ranking_v2_projection p ON p.book_id=bt.book_id AND p.topic_id=t.id AND p.active
                 WHERE t.ml_topic_id IS NOT NULL GROUP BY t.id ORDER BY t.id
@@ -50,13 +50,13 @@ public class CatalogSummaryService {
         long toc = jdbc.queryForObject("""
                 SELECT count(DISTINCT book_id) FROM (
                     SELECT DISTINCT ON (m.book_id,m.topic_id) m.book_id,m.toc_entry_count
-                    FROM backend.discovery_catalog_member m
+                    FROM backend.discovery_catalog_member m JOIN backend.catalog_visible_book_topic v ON v.book_id=m.book_id AND v.topic_id=m.topic_id
                     JOIN backend.discovery_catalog_import i ON i.snapshot_id=m.snapshot_id
                     ORDER BY m.book_id,m.topic_id,i.created_at DESC,i.snapshot_id DESC
                 ) latest WHERE toc_entry_count>0
                 """,Long.class);
-        long candidates = jdbc.queryForObject("SELECT count(DISTINCT book_id) FROM backend.book_ranking_v2_projection WHERE active",Long.class);
-        long concepts = jdbc.queryForObject("SELECT count(DISTINCT book_id) FROM backend.book_ranking_v2_projection WHERE active AND jsonb_array_length(covered_concepts)>0",Long.class);
-        return new Summary(jdbc.queryForObject("SELECT count(*) FROM backend.book",Long.class),toc,candidates,concepts,topics);
+        long candidates = jdbc.queryForObject("SELECT count(DISTINCT book_id) FROM backend.book_ranking_v2_projection p WHERE active AND EXISTS (SELECT 1 FROM backend.catalog_visible_book_topic v WHERE v.book_id=p.book_id AND v.topic_id=p.topic_id)",Long.class);
+        long concepts = jdbc.queryForObject("SELECT count(DISTINCT book_id) FROM backend.book_ranking_v2_projection p WHERE active AND EXISTS (SELECT 1 FROM backend.catalog_visible_book_topic v WHERE v.book_id=p.book_id AND v.topic_id=p.topic_id) AND jsonb_array_length(covered_concepts)>0",Long.class);
+        return new Summary(jdbc.queryForObject("SELECT count(*) FROM backend.catalog_visible_book",Long.class),toc,candidates,concepts,topics);
     }
 }

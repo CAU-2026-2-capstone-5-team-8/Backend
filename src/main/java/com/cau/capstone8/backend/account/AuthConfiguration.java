@@ -51,7 +51,7 @@ public class AuthConfiguration {
                     a.requestMatchers("/api/auth/register","/api/auth/login","/actuator/health","/error").permitAll()
                      .requestMatchers(HttpMethod.GET,"/api/topics","/api/topics/*/concept-map","/api/books","/api/books/**").permitAll()
                      .requestMatchers(HttpMethod.GET,"/swagger-ui.html","/swagger-ui/**","/v3/api-docs","/v3/api-docs/**").permitAll()
-                     .requestMatchers("/api/me","/api/me/**","/api/auth/logout").authenticated();
+                     .requestMatchers("/api/me","/api/me/**","/api/auth/logout","/api/topic-requests","/api/topic-requests/**").authenticated();
                     if (mode.equals("demo")) a.anyRequest().permitAll();
                     else a.anyRequest().authenticated();
                 })

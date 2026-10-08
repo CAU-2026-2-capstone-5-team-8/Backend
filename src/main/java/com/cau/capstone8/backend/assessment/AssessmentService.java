@@ -16,16 +16,20 @@ public class AssessmentService {
     private static final int QUESTIONS_PER_AREA = 3;
     private static final int TOTAL_QUESTIONS = QUESTIONS_PER_AREA * MeasurementArea.values().length;
 
+    private final QuestionTranslationService translations;
     private final AssessmentSessionRepository sessions;
     private final AssessmentQuestionRepository assessmentQuestions;
     private final AssessmentAnswerRepository answers;
     private final QuestionRepository questions;
     private final TopicRepository topics;
     private final AppUserRepository users;
+    private final com.cau.capstone8.backend.topic.TopicDiagnosticState diagnosticState;
 
     public AssessmentService(AssessmentSessionRepository sessions, AssessmentQuestionRepository assessmentQuestions,
                               AssessmentAnswerRepository answers, QuestionRepository questions,
-                              TopicRepository topics, AppUserRepository users) {
+                              TopicRepository topics, AppUserRepository users,com.cau.capstone8.backend.topic.TopicDiagnosticState diagnosticState, QuestionTranslationService translations) {
+        this.translations=translations;
+        this.diagnosticState=diagnosticState;
         this.sessions = sessions;
         this.assessmentQuestions = assessmentQuestions;
         this.answers = answers;
@@ -47,6 +51,8 @@ public class AssessmentService {
     private AssessmentResponse create(long userId, long topicId, boolean conceptPolicy) {
         if (!users.existsById(userId)) throw new ResourceNotFoundException("사용자를 찾을 수 없습니다.");
         if (!topics.existsById(topicId)) throw new ResourceNotFoundException("분야를 찾을 수 없습니다.");
+
+        if (!diagnosticState.ready(topicId)) throw new QuestionBankUnavailableException("선택한 분야의 문제 생성과 검토가 진행 중입니다.");
 
         List<Question> sampled = conceptPolicy
                 ? ConceptQuestionSelection.select(questions.findByTopicIdAndActiveTrueOrderById(topicId), TOTAL_QUESTIONS,
@@ -163,6 +169,7 @@ public class AssessmentService {
                 question.getMeasurementContextSnapshot(),
                 choices,
                 answer == null ? null : answer.getKnowsConcept(),
-                answer == null ? null : answer.getSelectedChoiceIndex());
+                answer == null ? null : answer.getSelectedChoiceIndex(),
+                translations.display(question));
     }
 }
