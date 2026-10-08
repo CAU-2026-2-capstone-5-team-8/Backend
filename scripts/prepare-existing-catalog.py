@@ -39,6 +39,8 @@ def prepare(source_path, selection_path, canonical_root, topics, output):
     selections = {b["ml_topic_id"]: b for b in selected["topics"]}
     datasets = {}
     for slug in topics:
+        if slug not in batches or slug not in selections:
+            raise ValueError("unknown_topic")
         batch = batches[slug]
         canonical = canonical_root / slug / "processed"
         for name, expected in batch["canonical_hashes"].items():
