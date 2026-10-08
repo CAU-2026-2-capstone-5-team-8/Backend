@@ -37,7 +37,9 @@ def prepare(source: Path, directory: Path):
     }
     key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:24]
     output = directory / "content-english" / key / "canonical"
-    translator = GeminiTranslator(os.getenv("GEMINI_API_KEY", ""), model, timeout=35)
+    # Two chunks may belong to the same book and therefore run sequentially.
+    # Allow for three provider attempts per chunk within the parent's 145s limit.
+    translator = GeminiTranslator(os.getenv("GEMINI_API_KEY", ""), model, timeout=20)
     try:
         summary = enrich_english(
             source, output, translator, scope="toc", workers=2, max_new_requests=2
